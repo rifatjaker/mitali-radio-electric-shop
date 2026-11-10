@@ -45,6 +45,11 @@ try {
             ) AS total_suppliers,
             (
                 SELECT COUNT(*)
+                FROM bank_accounts
+                WHERE shop_id = :bank_accounts_shop_id
+            ) AS total_bank_accounts,
+            (
+                SELECT COUNT(*)
                 FROM sales
                 WHERE shop_id = :total_sales_shop_id
             ) AS total_sales,
@@ -64,6 +69,11 @@ try {
                 FROM supplier_returns
                 WHERE shop_id = :total_supplier_returns_shop_id
             ) AS total_supplier_returns,
+            (
+                SELECT COUNT(*)
+                FROM supplier_payments
+                WHERE shop_id = :total_supplier_payments_shop_id
+            ) AS total_supplier_payments,
             (
                 SELECT COUNT(*)
                 FROM stock_adjustments
@@ -101,10 +111,12 @@ try {
         'products_shop_id' => $shopId,
         'customers_shop_id' => $shopId,
         'suppliers_shop_id' => $shopId,
+        'bank_accounts_shop_id' => $shopId,
         'total_sales_shop_id' => $shopId,
         'total_purchases_shop_id' => $shopId,
         'total_sales_returns_shop_id' => $shopId,
         'total_supplier_returns_shop_id' => $shopId,
+        'total_supplier_payments_shop_id' => $shopId,
         'total_stock_damages_shop_id' => $shopId,
         'total_transfers_shop_id' => $shopId,
         'total_users_shop_id' => $shopId,
@@ -116,7 +128,7 @@ try {
     }
 
     $activityStatement = $pdo->prepare(
-        'SELECT activity_type, reference, party, amount, activity_date
+        'SELECT activity_type, activity_id, reference, party, amount, activity_date
          FROM (
             SELECT \'sale\' AS activity_type,
                    COALESCE(s.invoice_number, CONCAT(\'বিক্রয় #\', s.id)) AS reference,
@@ -140,6 +152,17 @@ try {
             FROM purchase_bills pb
             INNER JOIN suppliers su ON su.id = pb.supplier_id
             WHERE pb.shop_id = :activity_purchases_shop_id
+            UNION ALL
+            SELECT \'supplier_payment\' AS activity_type,
+                   CONCAT(\'পেমেন্ট #\', sp.id) AS reference,
+                   su.supplier_name AS party,
+                   sp.payment_amount AS amount,
+                   DATE(sp.created_at) AS activity_date,
+                   sp.created_at AS sort_date,
+                   sp.id AS activity_id
+            FROM supplier_payments sp
+            INNER JOIN suppliers su ON su.id = sp.supplier_id
+            WHERE sp.shop_id = :activity_supplier_payments_shop_id
          ) activity
          ORDER BY sort_date DESC, activity_type, activity_id DESC
          LIMIT 10'
@@ -147,6 +170,7 @@ try {
     $activityStatement->execute([
         'activity_sales_shop_id' => $shopId,
         'activity_purchases_shop_id' => $shopId,
+        'activity_supplier_payments_shop_id' => $shopId,
     ]);
 
     respond(200, true, 'ড্যাশবোর্ডের সারাংশ পাওয়া গেছে।', [
@@ -155,10 +179,12 @@ try {
         'total_products' => (int) $summary['total_products'],
         'total_customers' => (int) $summary['total_customers'],
         'total_suppliers' => (int) $summary['total_suppliers'],
+        'total_bank_accounts' => (int) $summary['total_bank_accounts'],
         'total_sales' => (int) $summary['total_sales'],
         'total_purchases' => (int) $summary['total_purchases'],
         'total_sales_returns' => (int) $summary['total_sales_returns'],
         'total_supplier_returns' => (int) $summary['total_supplier_returns'],
+        'total_supplier_payments' => (int) $summary['total_supplier_payments'],
         'total_stock_damages' => (int) $summary['total_stock_damages'],
         'total_transfers' => (int) $summary['total_transfers'],
         'total_users' => (int) $summary['total_users'],

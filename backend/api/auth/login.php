@@ -34,13 +34,41 @@ if ((int) $user['is_active'] !== 1) {
     respond(403, false, 'এই অ্যাকাউন্টটি নিষ্ক্রিয়। দোকানের মালিকের সাথে যোগাযোগ করুন।');
 }
 
-$token = createToken($user);
 $permissions = [];
 try {
     $permissions = userPermissions($pdo, (int) $user['id'], (string) $user['role']);
 } catch (PDOException $exception) {
     error_log('Login permission lookup failed: ' . $exception->getMessage());
     respond(500, false, 'অ্যাকাউন্টের পারমিশন লোড করা যায়নি। সার্ভার সেটিংস পরীক্ষা করুন।');
+}
+
+$token = createToken($user);
+try {
+    $pdo->beginTransaction();
+    $updateLogin = $pdo->prepare(
+        'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = :user_id'
+    );
+    $updateLogin->execute(['user_id' => (int) $user['id']]);
+    $cleanupPresence = $pdo->prepare(
+        'DELETE FROM user_presence_sessions
+         WHERE last_seen_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)'
+    );
+    $cleanupPresence->execute();
+    $registerPresence = $pdo->prepare(
+        'INSERT INTO user_presence_sessions (token_hash, user_id, last_seen_at)
+         VALUES (:token_hash, :user_id, CURRENT_TIMESTAMP)'
+    );
+    $registerPresence->execute([
+        'token_hash' => hash('sha256', $token),
+        'user_id' => (int) $user['id'],
+    ]);
+    $pdo->commit();
+} catch (PDOException $exception) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('Login presence update failed: ' . $exception->getMessage());
+    respond(500, false, 'লগইন সময় সংরক্ষণ করা যায়নি। ডেটাবেজ মাইগ্রেশন পরীক্ষা করুন।');
 }
 
 respond(200, true, 'সফলভাবে লগইন হয়েছে।', [

@@ -63,6 +63,14 @@ usort($validatedItems, static fn(array $left, array $right): int => $left['purch
 try {
     $pdo = database();
     $pdo->beginTransaction();
+    $supplierCheck = $pdo->prepare(
+        'SELECT id FROM suppliers WHERE id = :supplier_id AND shop_id = :shop_id FOR UPDATE'
+    );
+    $supplierCheck->execute(['supplier_id' => $supplierId, 'shop_id' => $shopId]);
+    if (!$supplierCheck->fetch()) {
+        $pdo->rollBack();
+        respond(422, false, 'নির্বাচিত সাপ্লায়ার এই দোকানের নয়।');
+    }
     $billCheck = $pdo->prepare(
         'SELECT id FROM purchase_bills
          WHERE id = :bill_id AND shop_id = :shop_id AND supplier_id = :supplier_id

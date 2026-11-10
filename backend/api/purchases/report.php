@@ -161,7 +161,7 @@ try {
     unset($bill);
 
     $suppliersStatement = $pdo->prepare(
-        'SELECT id, supplier_name FROM suppliers
+        'SELECT id, supplier_name, address FROM suppliers
          WHERE shop_id = :shop_id ORDER BY supplier_name, id'
     );
     $suppliersStatement->execute(['shop_id' => $shopId]);

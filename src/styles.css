@@ -1205,6 +1205,11 @@ button {
   color: #3968ad;
 }
 
+.dashboard-activity-icon.activity-payment {
+  background: #fff3e5;
+  color: #a46118;
+}
+
 .dashboard-activity-details {
   display: grid;
   min-width: 0;
@@ -1237,6 +1242,36 @@ button {
 
 .dashboard-activity-amount.activity-sale-amount {
   color: #28774a;
+}
+
+.dashboard-activity-amount.activity-payment-amount {
+  color: #a34a3d;
+}
+
+.dashboard-activity-print {
+  min-height: 30px;
+  flex: 0 0 auto;
+  gap: 5px;
+  padding: 5px 8px;
+  border-color: #dce7de;
+  border-radius: 7px;
+  color: #355641;
+  font-size: 10px;
+}
+
+.dashboard-activity-print:disabled {
+  cursor: wait;
+}
+
+.sales-receipt-note {
+  margin: 14px 0 0;
+  padding: 9px 11px;
+  border-radius: 7px;
+  background: #f7faf7;
+  color: #526457;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .quick-action-list {
@@ -1296,6 +1331,114 @@ button {
 .quick-green { background: #e5f4e9; color: #28774a; }
 .quick-blue { background: #eaf2ff; color: #3968ad; }
 .quick-amber { background: #fff3dc; color: #a17420; }
+
+.dashboard-presence {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #edf0ed;
+}
+
+.dashboard-presence-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.dashboard-presence-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #34483a;
+  font-size: 13px;
+}
+
+.dashboard-presence-heading h3 svg {
+  color: #39815a;
+}
+
+.dashboard-presence-heading > span {
+  color: #96a098;
+  font-size: 9px;
+}
+
+.dashboard-presence-list {
+  display: grid;
+}
+
+.dashboard-presence-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 2px;
+  border-bottom: 1px solid #f0f2f0;
+}
+
+.dashboard-presence-item:last-child {
+  border-bottom: 0;
+}
+
+.presence-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #aeb7b0;
+}
+
+.presence-status-dot.presence-online {
+  background: #36a269;
+  box-shadow: 0 0 0 3px #e4f4eb;
+}
+
+.dashboard-presence-user {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.dashboard-presence-user strong {
+  overflow: hidden;
+  color: #35463a;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-presence-user small {
+  color: #929d95;
+  font-size: 9px;
+}
+
+.presence-status-label {
+  flex: 0 0 auto;
+  color: #8d9890;
+  font-size: 10px;
+}
+
+.presence-status-label.presence-online-label {
+  color: #24804e;
+  font-weight: 700;
+}
+
+.dashboard-presence-message {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #8a968e;
+  font-size: 11px;
+  text-align: center;
+}
+
+.dashboard-presence-error {
+  color: #a84c46;
+}
 
 .dashboard-menu-section {
   margin-top: 24px;
@@ -2168,6 +2311,26 @@ button {
   background: #fff;
 }
 
+.sales-return-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid #dce9df;
+  border-radius: 10px;
+  background: #f3f8f4;
+  color: #536157;
+  font-size: 12px;
+}
+
+.sales-return-total strong {
+  color: #236d46;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
 .sales-invoice-picker {
   display: grid;
   grid-template-columns: 130px minmax(0, 1fr);
@@ -2914,10 +3077,18 @@ button {
 
 .warehouse-stock-filters {
   display: grid;
-  grid-template-columns: minmax(200px, 0.8fr) minmax(240px, 1fr) auto auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
   gap: 12px;
   padding: 16px 20px;
+}
+
+.warehouse-stock-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px 14px;
   border-bottom: 1px solid #e8eee8;
 }
 
@@ -2926,11 +3097,38 @@ button {
 }
 
 .warehouse-stock-count {
-  padding: 10px 0;
+  padding: 0;
   color: #236d46;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.warehouse-stock-print-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1px solid #cfe3d2;
+  border-radius: 9px;
+  background: #f0f8f1;
+  color: #236d46;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.warehouse-stock-print-button:hover:not(:disabled) {
+  border-color: #9dc9a6;
+  background: #e6f4e8;
+}
+
+.warehouse-stock-print-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .warehouse-stock-filters .searchable-select .stock-report-select-label {
@@ -4243,6 +4441,10 @@ button {
     grid-template-columns: 1fr;
     align-items: stretch;
     padding: 14px 16px;
+  }
+
+  .warehouse-stock-toolbar {
+    padding: 0 16px 12px;
   }
 
   .warehouse-stock-count {

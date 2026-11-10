@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name VARCHAR(120) NOT NULL,
   role ENUM('owner', 'manager', 'staff') NOT NULL DEFAULT 'owner',
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  last_login_at DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -38,6 +39,19 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (shop_id) REFERENCES shops (id)
     ON UPDATE CASCADE
     ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_presence_sessions (
+  token_hash CHAR(64) NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  last_seen_at DATETIME NOT NULL,
+  PRIMARY KEY (token_hash),
+  KEY idx_user_presence_sessions_user_seen (user_id, last_seen_at),
+  KEY idx_user_presence_sessions_seen (last_seen_at),
+  CONSTRAINT fk_user_presence_sessions_user
+    FOREIGN KEY (user_id) REFERENCES users (id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS warehouses (
@@ -116,6 +130,66 @@ CREATE TABLE IF NOT EXISTS suppliers (
     ON UPDATE CASCADE
     ON DELETE RESTRICT,
   CONSTRAINT fk_suppliers_created_by
+    FOREIGN KEY (created_by) REFERENCES users (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS bank_accounts (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  shop_id BIGINT UNSIGNED NOT NULL,
+  bank_name VARCHAR(180) NOT NULL,
+  account_name VARCHAR(180) NOT NULL,
+  account_number VARCHAR(100) NULL,
+  branch_name VARCHAR(120) NULL,
+  routing_number VARCHAR(30) NULL,
+  mobile_number VARCHAR(20) NULL,
+  opening_balance DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+  note VARCHAR(255) NULL,
+  created_by BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_bank_accounts_shop_bank_account (shop_id, bank_name, account_number),
+  KEY idx_bank_accounts_shop_id (shop_id),
+  KEY idx_bank_accounts_bank_name (bank_name),
+  CONSTRAINT fk_bank_accounts_shop
+    FOREIGN KEY (shop_id) REFERENCES shops (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_bank_accounts_created_by
+    FOREIGN KEY (created_by) REFERENCES users (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS supplier_payments (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  shop_id BIGINT UNSIGNED NOT NULL,
+  supplier_id BIGINT UNSIGNED NOT NULL,
+  payment_amount DECIMAL(12, 2) NOT NULL,
+  payment_method ENUM('cash', 'bank') NOT NULL,
+  bank_account_id BIGINT UNSIGNED NULL,
+  note VARCHAR(500) NULL,
+  created_by BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_supplier_payments_shop_date (shop_id, created_at),
+  KEY idx_supplier_payments_supplier (supplier_id),
+  KEY idx_supplier_payments_bank_account (bank_account_id),
+  CONSTRAINT fk_supplier_payments_shop
+    FOREIGN KEY (shop_id) REFERENCES shops (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_supplier_payments_supplier
+    FOREIGN KEY (supplier_id) REFERENCES suppliers (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_supplier_payments_bank_account
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_supplier_payments_created_by
     FOREIGN KEY (created_by) REFERENCES users (id)
     ON UPDATE CASCADE
     ON DELETE RESTRICT

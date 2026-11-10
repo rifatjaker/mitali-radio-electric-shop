@@ -15,6 +15,7 @@ import {
   EyeOff,
   Info,
   KeyRound,
+  Landmark,
   LayoutDashboard,
   Lightbulb,
   LockKeyhole,
@@ -315,7 +316,7 @@ const DASHBOARD_TABS = [
     id: "setup",
     label: "সেটআপ",
     icon: Settings,
-    description: "দোকানের পণ্য, গ্রাহক ও সরবরাহকারীর তথ্য",
+    description: "দোকানের পণ্য, গ্রাহক, সরবরাহকারী ও ব্যাংক হিসাব",
     modules: [
       { key: "user-management", title: "ইউজার ও পারমিশন", detail: "কর্মচারীর অ্যাকাউন্ট ও প্রবেশাধিকার", icon: ShieldCheck },
       { key: "shop-management", title: "দোকান পরিচালনা", detail: "দোকান, মেমো ও যোগাযোগের তথ্য", icon: Store },
@@ -323,6 +324,7 @@ const DASHBOARD_TABS = [
       { key: "product-setup", title: "পণ্য সেটআপ", detail: "পণ্যের নাম, দাম ও স্টক", icon: PackagePlus },
       { key: "customer-setup", title: "কাস্টমার সেটআপ", detail: "গ্রাহকের তথ্য ও বাকি হিসাব", icon: Users },
       { key: "supplier-setup", title: "সাপ্লায়ার সেটআপ", detail: "সরবরাহকারী, বাকি ও ব্যাংক তথ্য", icon: Truck },
+      { key: "bank-setup", title: "ব্যাংক সেটআপ", detail: "ব্যাংক হিসাব ও প্রারম্ভিক ব্যালেন্স", icon: Landmark },
     ],
   },
   {
@@ -336,7 +338,7 @@ const DASHBOARD_TABS = [
       { key: "supplier-return", title: "সাপ্লায়ার রিটার্ন", detail: "ক্রয়ের পণ্য ফেরত দিয়ে দোকান স্টক কমান", icon: RotateCcw },
       { key: "stock-damage", title: "ড্যামেজ স্টক", detail: "নষ্ট পণ্য এন্ট্রি করে স্টক সমন্বয়", icon: Package },
       { title: "কম স্টকের পণ্য", detail: "পুনরায় অর্ডার করার তালিকা", icon: Package },
-      { title: "সাপ্লায়ার পেমেন্ট", detail: "পাওনা পরিশোধের হিসাব", icon: Wallet },
+      { key: "supplier-payment", title: "সাপ্লায়ার পেমেন্ট", detail: "নগদ বা ব্যাংকে পাওনা পরিশোধ", icon: Wallet },
     ],
   },
   {
@@ -346,8 +348,7 @@ const DASHBOARD_TABS = [
     description: "বিক্রয়, রিটার্ন এবং কাস্টমার পেমেন্ট",
     modules: [
       { key: "sales-create", title: "নতুন বিক্রয়", detail: "কাস্টমার বিল তৈরি করুন", icon: ShoppingCart },
-      { title: "বিক্রয় তালিকা", detail: "আগের বিক্রয়ের বিল দেখুন", icon: ClipboardList },
-      { key: "sales-return", title: "কাস্টমার রিটার্ন", detail: "আগের বিলের পণ্য ফেরত ও বর্তমান বিলে সমন্বয়", icon: RotateCcw },
+      { key: "sales-return", title: "কাস্টমার রিটার্ন", detail: "আগের বিলের পণ্য ফেরত ও বকেয়া সমন্বয়", icon: RotateCcw },
       { title: "বাকি আদায়", detail: "কাস্টমার পেমেন্ট গ্রহণ", icon: Wallet },
     ],
   },
@@ -1304,8 +1305,25 @@ function CustomerSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
                                 <Pencil size={16} />
                               </button>
                             ) : null}
-                            {canDelete && customer.can_delete ? (
-                              <button aria-label={`${customer.customer_name} মুছুন`} className="user-action-button user-action-delete product-action-trash" onClick={() => deleteCustomer(customer)} title="মুছুন" type="button">
+                            {canDelete ? (
+                              <button
+                                aria-disabled={!customer.can_delete}
+                                aria-label={customer.can_delete
+                                  ? `${customer.customer_name} মুছুন`
+                                  : `${customer.customer_name} কাস্টমার মুছতে পারবেন না`}
+                                className={`user-action-button user-action-delete product-action-trash${customer.can_delete ? "" : " product-action-disabled"}`}
+                                onClick={() => {
+                                  if (customer.can_delete) {
+                                    deleteCustomer(customer);
+                                  } else {
+                                    showToast("error", customer.has_transactions
+                                      ? "এই কাস্টমারের লেনদেন আছে, তাই মুছে ফেলা যাবে না।"
+                                      : "এই কাস্টমারের বকেয়া আছে, তাই মুছে ফেলা যাবে না।");
+                                  }
+                                }}
+                                title={customer.can_delete ? "কাস্টমার মুছুন" : customer.has_transactions ? "লেনদেন আছে" : "বকেয়া আছে"}
+                                type="button"
+                              >
                                 <Trash2 size={16} />
                               </button>
                             ) : null}
@@ -1686,8 +1704,25 @@ function SupplierSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
                                 <Pencil size={16} />
                               </button>
                             ) : null}
-                            {canDelete && supplier.can_delete ? (
-                              <button aria-label={`${supplier.supplier_name} মুছুন`} className="user-action-button user-action-delete product-action-trash" onClick={() => deleteSupplier(supplier)} title="মুছুন" type="button">
+                            {canDelete ? (
+                              <button
+                                aria-disabled={!supplier.can_delete}
+                                aria-label={supplier.can_delete
+                                  ? `${supplier.supplier_name} মুছুন`
+                                  : `${supplier.supplier_name} সাপ্লায়ার মুছতে পারবেন না`}
+                                className={`user-action-button user-action-delete product-action-trash${supplier.can_delete ? "" : " product-action-disabled"}`}
+                                onClick={() => {
+                                  if (supplier.can_delete) {
+                                    deleteSupplier(supplier);
+                                  } else {
+                                    showToast("error", supplier.has_transactions
+                                      ? "এই সাপ্লায়ারের লেনদেন আছে, তাই মুছে ফেলা যাবে না।"
+                                      : "এই সাপ্লায়ারের বকেয়া আছে, তাই মুছে ফেলা যাবে না।");
+                                  }
+                                }}
+                                title={supplier.can_delete ? "সাপ্লায়ার মুছুন" : supplier.has_transactions ? "লেনদেন আছে" : "বকেয়া আছে"}
+                                type="button"
+                              >
                                 <Trash2 size={16} />
                               </button>
                             ) : null}
@@ -1734,6 +1769,267 @@ function SupplierSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
             ) : null}
             {canDelete && suppliers.some((supplier) => !supplier.can_delete) ? (
               <p className="user-management-note">ক্রয়/পেমেন্ট লেনদেন বা বকেয়া থাকা সাপ্লায়ার মুছতে পারবেন না।</p>
+            ) : null}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function BankSetupForm({ token, shopId, onClose, onDataChanged, showToast, canEdit, canDelete }) {
+  const emptyValues = {
+    bank_name: "",
+    account_name: "",
+    account_number: "",
+    branch_name: "",
+    routing_number: "",
+    mobile_number: "",
+    opening_balance: "0",
+    note: "",
+  };
+  const [values, setValues] = useState(emptyValues);
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  async function loadAccounts() {
+    setLoading(true);
+    try {
+      const response = await apiRequest("/banks/list.php", { token, shopId });
+      setAccounts(response.data.accounts);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAccounts();
+  }, [token, shopId]);
+
+  function startCreate() {
+    setValues(emptyValues);
+    setEditingAccount(null);
+    setShowEditor(true);
+  }
+
+  function startEdit(account) {
+    setValues({
+      bank_name: account.bank_name || "",
+      account_name: account.account_name || "",
+      account_number: account.account_number || "",
+      branch_name: account.branch_name || "",
+      routing_number: account.routing_number || "",
+      mobile_number: account.mobile_number || "",
+      opening_balance: String(account.opening_balance ?? 0),
+      note: account.note || "",
+    });
+    setEditingAccount(account);
+    setShowEditor(true);
+  }
+
+  async function deleteAccount(account) {
+    if (!account.can_delete) {
+      showToast("error", account.has_transactions
+        ? "লেনদেনে ব্যবহৃত ব্যাংক হিসাব মুছে ফেলা যাবে না।"
+        : "প্রারম্ভিক ব্যালেন্স থাকা ব্যাংক হিসাব মুছে ফেলা যাবে না।");
+      return;
+    }
+    if (!window.confirm(`“${account.bank_name} · ${account.account_name}” হিসাবটি মুছে ফেলবেন?`)) return;
+    try {
+      const response = await apiRequest("/banks/delete.php", {
+        method: "POST",
+        token,
+        shopId,
+        body: JSON.stringify({ id: account.id }),
+      });
+      showToast("success", response.message);
+      await loadAccounts();
+      onDataChanged();
+    } catch (error) {
+      showToast("error", error.message);
+    }
+  }
+
+  function updateField(event) {
+    const { name, value } = event.target;
+    setValues((current) => ({ ...current, [name]: value }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const response = await apiRequest(editingAccount ? "/banks/update.php" : "/banks/create.php", {
+        method: "POST",
+        token,
+        shopId,
+        body: JSON.stringify({
+          ...values,
+          ...(editingAccount ? { id: editingAccount.id } : {}),
+        }),
+      });
+      showToast("success", response.message);
+      await loadAccounts();
+      onDataChanged();
+      setShowEditor(false);
+      setEditingAccount(null);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const filteredAccounts = accounts.filter((account) => (
+    [
+      account.bank_name,
+      account.account_name,
+      account.account_number,
+      account.branch_name,
+      account.routing_number,
+      account.mobile_number,
+      account.note,
+    ].filter(Boolean).some((value) => String(value).toLocaleLowerCase().includes(normalizedSearch))
+  ));
+  const pageCount = Math.max(1, Math.ceil(filteredAccounts.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleAccounts = filteredAccounts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  function field(name, label, options = {}) {
+    const { type = "text", maxLength, step, min, placeholder = "" } = options;
+    const required = name === "bank_name" || name === "account_name";
+    return (
+      <label className="product-form-field" htmlFor={`bank-${name.replaceAll("_", "-")}`} key={name}>
+        <span className="product-field-label">{label}{required ? <span className="required-badge">আবশ্যক</span> : <span className="optional-label">ঐচ্ছিক</span>}</span>
+        <input
+          autoComplete="off"
+          className="product-field-control"
+          id={`bank-${name.replaceAll("_", "-")}`}
+          maxLength={maxLength}
+          min={min}
+          name={name}
+          onChange={updateField}
+          placeholder={placeholder}
+          required={required}
+          step={step}
+          type={type}
+          value={values[name]}
+        />
+      </label>
+    );
+  }
+
+  return (
+    <div className="product-modal-backdrop">
+      <section aria-labelledby="bank-setup-title" aria-modal="true" className="product-modal supplier-setup-modal" role="dialog">
+        <header className="product-modal-header">
+          <span className="product-modal-icon"><Landmark size={22} /></span>
+          <div>
+            <h2 id="bank-setup-title">{showEditor ? (editingAccount ? "ব্যাংক হিসাব সম্পাদনা" : "নতুন ব্যাংক হিসাব") : "ব্যাংক সেটআপ"}</h2>
+            <p>ব্যাংক, অ্যাকাউন্টের তথ্য ও প্রারম্ভিক ব্যালেন্স পরিচালনা করুন।</p>
+          </div>
+          <button aria-label="ব্যাংক সেটআপ বন্ধ করুন" className="product-modal-close" disabled={saving} onClick={onClose} type="button"><X size={20} /></button>
+        </header>
+        {showEditor ? (
+          <form className="product-form" onSubmit={handleSubmit}>
+            <div className="product-form-grid">
+              {field("bank_name", "ব্যাংকের নাম", { maxLength: 180, placeholder: "যেমন: সোনালী ব্যাংক" })}
+              {field("account_name", "হিসাবের নাম", { maxLength: 180, placeholder: "হিসাবের মালিকের নাম" })}
+              {field("account_number", "হিসাব নম্বর", { maxLength: 100 })}
+              {field("branch_name", "শাখার নাম", { maxLength: 120 })}
+              {field("routing_number", "রাউটিং নম্বর", { maxLength: 30 })}
+              {field("mobile_number", "মোবাইল নম্বর", { maxLength: 20, placeholder: "ব্যাংক হিসাবের যোগাযোগ নম্বর" })}
+              {field("opening_balance", "প্রারম্ভিক ব্যালেন্স (৳)", { type: "number", min: "0", step: "0.01" })}
+              {field("note", "নোট", { maxLength: 255 })}
+            </div>
+            <footer className="product-form-actions">
+              <span><span className="required-mark">*</span> ব্যাংক ও হিসাবের নাম আবশ্যক</span>
+              <div>
+                <button className="product-cancel-button" disabled={saving} onClick={() => setShowEditor(false)} type="button">বাতিল</button>
+                <button className="product-save-button" disabled={saving} type="submit">
+                  {saving ? <span className="button-spinner" /> : <Save size={17} />}
+                  {saving ? "সংরক্ষণ হচ্ছে..." : editingAccount ? "পরিবর্তন সংরক্ষণ" : "ব্যাংক হিসাব সংরক্ষণ"}
+                </button>
+              </div>
+            </footer>
+          </form>
+        ) : (
+          <div className="user-list-content">
+            <div className="product-list-toolbar">
+              <label className="product-list-search" htmlFor="bank-account-search">
+                <span>ব্যাংক হিসাব খুঁজুন</span>
+                <input autoComplete="off" className="product-field-control" id="bank-account-search" onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }} placeholder="ব্যাংক, হিসাব নম্বর, শাখা বা মোবাইল" type="search" value={search} />
+              </label>
+              <span className="product-list-count">{numberFormatter.format(filteredAccounts.length)} / {numberFormatter.format(accounts.length)}টি হিসাব</span>
+              <button className="product-save-button" onClick={startCreate} type="button"><Plus size={17} /> নতুন ব্যাংক হিসাব</button>
+            </div>
+            {loading ? (
+              <div className="user-list-empty"><span className="button-spinner" /> ব্যাংক হিসাব লোড হচ্ছে...</div>
+            ) : accounts.length === 0 ? (
+              <div className="user-list-empty">এখনো কোনো ব্যাংক হিসাব যোগ করা হয়নি।</div>
+            ) : filteredAccounts.length === 0 ? (
+              <div className="user-list-empty">এই অনুসন্ধানে কোনো ব্যাংক হিসাব পাওয়া যায়নি।</div>
+            ) : (
+              <div className="user-table-wrap supplier-setup-table-wrap">
+                <table className="user-management-table supplier-setup-table">
+                  <thead><tr><th scope="col">ব্যাংক / হিসাব</th><th scope="col">হিসাব নম্বর / শাখা</th><th scope="col">যোগাযোগ</th><th scope="col">প্রারম্ভিক ব্যালেন্স</th><th scope="col">নোট</th><th scope="col">অ্যাকশন</th></tr></thead>
+                  <tbody>
+                    {visibleAccounts.map((account) => (
+                      <tr key={account.id}>
+                        <td><strong>{account.bank_name}</strong><span className="user-table-secondary">{account.account_name}</span></td>
+                        <td>{account.account_number || "—"}<span className="user-table-secondary">{[account.branch_name, account.routing_number ? `রাউটিং ${account.routing_number}` : ""].filter(Boolean).join(" · ") || "—"}</span></td>
+                        <td>{account.mobile_number || "—"}</td>
+                        <td>৳ {formatMoney(account.opening_balance)}</td>
+                        <td>{account.note || "—"}</td>
+                        <td><div className="user-list-actions">
+                          {canEdit ? <button aria-label={`${account.bank_name} হিসাব সম্পাদনা করুন`} className="user-action-button product-action-edit" onClick={() => startEdit(account)} title="এডিট" type="button"><Pencil size={16} /></button> : null}
+                          {canDelete ? (
+                            <button
+                              aria-disabled={!account.can_delete}
+                              aria-label={account.can_delete ? `${account.bank_name} হিসাব মুছুন` : `${account.bank_name} হিসাব মুছতে পারবেন না`}
+                              className={`user-action-button user-action-delete product-action-trash${account.can_delete ? "" : " product-action-disabled"}`}
+                              onClick={() => deleteAccount(account)}
+                              title={account.can_delete ? "হিসাব মুছুন" : "প্রারম্ভিক ব্যালেন্স আছে"}
+                              type="button"
+                            ><Trash2 size={16} /></button>
+                          ) : null}
+                        </div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!loading && filteredAccounts.length > 0 ? (
+              <div className="product-list-pagination">
+                <span>{numberFormatter.format((currentPage - 1) * pageSize + 1)}–{numberFormatter.format(Math.min(currentPage * pageSize, filteredAccounts.length))} / {numberFormatter.format(filteredAccounts.length)}টি</span>
+                <div>
+                  <span className="product-list-page-size">প্রতি পাতায়{[10, 25, 50].map((size) => (
+                    <button aria-pressed={pageSize === size} className={pageSize === size ? "product-list-page-size-active" : ""} key={size} onClick={() => {
+                      setPageSize(size);
+                      setPage(1);
+                    }} type="button">{numberFormatter.format(size)}</button>
+                  ))}</span>
+                  <button disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} type="button">আগের</button>
+                  <strong>{numberFormatter.format(currentPage)} / {numberFormatter.format(pageCount)}</strong>
+                  <button disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)} type="button">পরের</button>
+                </div>
+              </div>
+            ) : null}
+            {canDelete && accounts.some((account) => !account.can_delete) ? (
+              <p className="user-management-note">প্রারম্ভিক ব্যালেন্স থাকা ব্যাংক হিসাব মুছে ফেলা যাবে না।</p>
             ) : null}
           </div>
         )}
@@ -2145,6 +2441,7 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast }) {
 }
 
 function SalesReceiptHeader({ receipt, shop }) {
+  const isCustomerReturn = receipt.document_type === "customer_return";
   const [year, month, day] = String(receipt.sale_date || "").split("-");
   const formattedDate = year && month && day ? `${day}-${month}-${year}` : receipt.sale_date;
   const [hours, minutes] = String(receipt.sale_time || "").split(":").map(Number);
@@ -2154,11 +2451,11 @@ function SalesReceiptHeader({ receipt, shop }) {
   return (
     <div className="sales-receipt-heading">
       <ShopPrintHeader shop={shop} />
-      <span className="sales-receipt-title">বিক্রয় রসিদ</span>
+      <span className="sales-receipt-title">{isCustomerReturn ? "কাস্টমার রিটার্ন রসিদ" : "বিক্রয় রসিদ"}</span>
       <div className="sales-receipt-meta">
         <span><strong>বিল নম্বর</strong><b>{receipt.invoice_number}</b></span>
         <span><strong>তারিখ ও সময়</strong><b>{formattedDate}{formattedTime ? ` · ${formattedTime}` : ""}</b></span>
-        <span><strong>বিক্রয়ের স্থান</strong><b>{receipt.sale_source === "warehouse" ? receipt.warehouse_name : "দোকান"}</b></span>
+        {!isCustomerReturn ? <span><strong>বিক্রয়ের স্থান</strong><b>{receipt.sale_source === "warehouse" ? receipt.warehouse_name : "দোকান"}</b></span> : null}
         <span><strong>অপারেটর</strong><b>{receipt.operator_name || "—"}</b></span>
         <span className="sales-receipt-customer-info">
           <strong>কাস্টমার:</strong>
@@ -2189,7 +2486,7 @@ function SalesReceiptFooter() {
   );
 }
 
-function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, startWithReturn = false }) {
+function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
   const [customers, setCustomers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
@@ -2213,11 +2510,9 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, startWith
     payment_received: "",
     notes: "",
   });
-  const [items, setItems] = useState(() => (
-    startWithReturn ? [] : [
-      { rowId: 1, product_id: "", product_search: "", quantity: "1", unit_price: "" },
-    ]
-  ));
+  const [items, setItems] = useState([
+    { rowId: 1, product_id: "", product_search: "", quantity: "1", unit_price: "" },
+  ]);
   const [nextRowId, setNextRowId] = useState(2);
   const [showReturns, setShowReturns] = useState(false);
   const [loadingReturns, setLoadingReturns] = useState(false);
@@ -2386,9 +2681,6 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, startWith
     setItems((current) => {
       if (current.length > 1) {
         return current.filter((item) => item.rowId !== rowId);
-      }
-      if (startWithReturn) {
-        return [];
       }
       return current.map((item) => (
         item.rowId === rowId
@@ -2915,7 +3207,287 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, startWith
   );
 }
 
+function CustomerReturnForm({ token, shopId, shop, onClose, onSaved, showToast }) {
+  const [customers, setCustomers] = useState([]);
+  const [customerId, setCustomerId] = useState("");
+  const [walkInName, setWalkInName] = useState("");
+  const [returnDate, setReturnDate] = useState(new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10));
+  const [items, setItems] = useState([]);
+  const [selectedInvoice, setSelectedInvoice] = useState("");
+  const [quantities, setQuantities] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [receipt, setReceipt] = useState(null);
+  const selectedCustomer = customers.find((customer) => customer.id === Number(customerId));
+  const availableInvoices = Array.from(new Map(items.map((item) => [item.sale_id, item])).values());
+  const invoiceItems = items.filter((item) => String(item.sale_id) === selectedInvoice);
+  const selectedReturns = items
+    .filter((item) => String(item.sale_id) === selectedInvoice)
+    .filter((item) => Number(quantities[item.sale_item_id]) > 0)
+    .map((item) => ({
+      ...item,
+      return_quantity: Number(quantities[item.sale_item_id]),
+    }));
+  const returnTotal = selectedReturns.reduce(
+    (total, item) => total + Math.round(item.return_quantity * Number(item.unit_price) * 100) / 100,
+    0,
+  );
+
+  useEffect(() => {
+    let active = true;
+    apiRequest("/customers/list.php", { token, shopId })
+      .then((response) => {
+        if (active) setCustomers(response.data.customers);
+      })
+      .catch((error) => {
+        if (active) showToast("error", error.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, shopId, showToast]);
+
+  function resetReturnItems() {
+    setItems([]);
+    setSelectedInvoice("");
+    setQuantities({});
+  }
+
+  async function loadReturnableItems() {
+    if (!customerId && !walkInName.trim()) {
+      showToast("info", "আগের বিল খুঁজতে কাস্টমার নির্বাচন করুন অথবা ওয়াক-ইন কাস্টমারের নাম লিখুন।");
+      return;
+    }
+
+    setLoadingItems(true);
+    try {
+      const query = new URLSearchParams();
+      if (customerId) query.set("customer_id", customerId);
+      else query.set("customer_name", walkInName.trim());
+      const response = await apiRequest(`/sales/returnable.php?${query.toString()}`, { token, shopId });
+      setItems(response.data.items);
+      setSelectedInvoice("");
+      setQuantities({});
+      if (response.data.items.length === 0) {
+        showToast("info", "এই কাস্টমারের কোনো ফেরতযোগ্য আগের বিল পাওয়া যায়নি।");
+      }
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setLoadingItems(false);
+    }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (selectedReturns.length === 0) {
+      showToast("error", "ফেরত দেওয়ার জন্য অন্তত একটি পণ্যের পরিমাণ লিখুন।");
+      return;
+    }
+    if (selectedReturns.some((item) => (
+      item.return_quantity > Number(item.remaining_quantity)
+    ))) {
+      showToast("error", "ফেরতের পরিমাণ আগের বিলে অবশিষ্ট পণ্যের চেয়ে বেশি।");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await apiRequest("/sales/create.php", {
+        method: "POST",
+        token,
+        shopId,
+        body: JSON.stringify({
+          customer_id: customerId,
+          customer_name: selectedCustomer ? selectedCustomer.customer_name : walkInName.trim(),
+          sale_date: returnDate,
+          sale_source: "shop",
+          warehouse_id: "",
+          vat_amount: "0",
+          discount_amount: "0",
+          special_discount_amount: "0",
+          payment_method: selectedCustomer ? "credit" : "cash",
+          payment_received: "0",
+          notes: "",
+          items: [],
+          returns: selectedReturns.map((item) => ({
+            sale_item_id: item.sale_item_id,
+            quantity: String(item.return_quantity),
+          })),
+        }),
+      });
+      setReceipt({ ...response.data.sale, document_type: "customer_return" });
+      onSaved();
+      showToast("success", "কাস্টমার রিটার্ন সংরক্ষণ হয়েছে।");
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (receipt) {
+    return (
+      <SalesReceiptMemo
+        onClose={() => {
+          setReceipt(null);
+          onClose();
+        }}
+        receipt={receipt}
+        shop={shop}
+        showToast={showToast}
+      />
+    );
+  }
+
+  return (
+    <div className="product-modal-backdrop">
+      <section aria-labelledby="customer-return-title" aria-modal="true" className="product-modal sales-modal" role="dialog">
+        <header className="product-modal-header">
+          <span className="product-modal-icon"><RotateCcw size={22} /></span>
+          <div>
+            <h2 id="customer-return-title">কাস্টমার রিটার্ন</h2>
+            <p>আগের বিক্রয় বিল থেকে ফেরত পণ্য গ্রহণ করুন।</p>
+          </div>
+          <button aria-label="কাস্টমার রিটার্ন ফর্ম বন্ধ করুন" className="product-modal-close" disabled={saving} onClick={onClose} type="button">
+            <X size={20} />
+          </button>
+        </header>
+        {loading ? (
+          <div className="user-list-empty"><span className="button-spinner" /> কাস্টমারের তথ্য লোড হচ্ছে...</div>
+        ) : (
+          <form className="product-form sales-form" onSubmit={handleSubmit}>
+            <div className="sales-form-grid">
+              <label className="product-form-field" htmlFor="customer-return-customer">
+                <span className="product-field-label">কাস্টমার খুঁজুন</span>
+                <SearchableSelect
+                  id="customer-return-customer"
+                  onChange={(event) => {
+                    setCustomerId(event.target.value);
+                    setWalkInName("");
+                    resetReturnItems();
+                  }}
+                  options={[
+                    { value: "", label: "ওয়াক-ইন কাস্টমার" },
+                    ...customers.map((customer) => ({
+                      value: customer.id,
+                      label: `${customer.customer_name}${customer.mobile_number ? ` · ${customer.mobile_number}` : ` · #${customer.id}`}`,
+                    })),
+                  ]}
+                  placeholder="নাম বা মোবাইল নম্বর লিখে খুঁজুন"
+                  value={customerId}
+                />
+                {selectedCustomer ? (
+                  <small>বর্তমান বকেয়া: ৳ {formatMoney(selectedCustomer.current_balance)}</small>
+                ) : null}
+              </label>
+              {!selectedCustomer ? (
+                <label className="product-form-field" htmlFor="customer-return-walkin-name">
+                  <span className="product-field-label">ওয়াক-ইন কাস্টমারের নাম</span>
+                  <input
+                    className="product-field-control"
+                    id="customer-return-walkin-name"
+                    maxLength={180}
+                    onChange={(event) => {
+                      setWalkInName(event.target.value);
+                      resetReturnItems();
+                    }}
+                    required={!customerId}
+                    value={walkInName}
+                  />
+                </label>
+              ) : null}
+              <label className="product-form-field" htmlFor="customer-return-date">
+                <span className="product-field-label">রিটার্নের তারিখ</span>
+                <input className="product-field-control" id="customer-return-date" onChange={(event) => setReturnDate(event.target.value)} required type="date" value={returnDate} />
+              </label>
+            </div>
+
+            <div className="sales-return-toolbar">
+              <div>
+                <strong>আগের বিলের পণ্য</strong>
+                <small>ফেরতযোগ্য পরিমাণ বেছে রিটার্ন যোগ করুন।</small>
+              </div>
+              <button className="purchase-add-row" disabled={loadingItems} onClick={loadReturnableItems} type="button">
+                {loadingItems ? <span className="button-spinner" /> : <RotateCcw size={16} />}
+                ফেরতযোগ্য পণ্য খুঁজুন
+              </button>
+            </div>
+            {items.length > 0 ? (
+              <div className="sales-return-panel">
+                <label className="sales-invoice-picker" htmlFor="customer-return-invoice">
+                  <span>পুরোনো বিল নম্বর</span>
+                  <SearchableSelect
+                    id="customer-return-invoice"
+                    onChange={(event) => {
+                      setSelectedInvoice(event.target.value);
+                      setQuantities({});
+                    }}
+                    options={[
+                      { value: "", label: "বিল নির্বাচন করুন" },
+                      ...availableInvoices.map((invoice) => ({
+                        value: invoice.sale_id,
+                        label: `${invoice.invoice_number} · ${invoice.sale_date}`,
+                      })),
+                    ]}
+                    placeholder="পুরোনো বিল নম্বর লিখে নির্বাচন করুন"
+                    value={selectedInvoice}
+                  />
+                </label>
+                {invoiceItems.map((item) => (
+                  <label className="sales-return-item" key={item.sale_item_id}>
+                    <span>
+                      <strong>{item.product_name}</strong>
+                      <small>{item.invoice_number} · বিক্রি {item.original_quantity} · ফেরতযোগ্য {item.remaining_quantity} · ৳{formatMoney(item.unit_price)}/{item.unit || "টি"}</small>
+                    </span>
+                    <span className="sales-return-quantity">
+                      <small>ফেরত পরিমাণ</small>
+                      <input
+                        className="product-field-control"
+                        max={item.remaining_quantity}
+                        min="0"
+                        onChange={(event) => setQuantities((current) => ({ ...current, [item.sale_item_id]: event.target.value }))}
+                        step="0.001"
+                        type="number"
+                        value={quantities[item.sale_item_id] || ""}
+                      />
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            {selectedReturns.length > 0 ? (
+              <div className="sales-return-total">
+                <span>
+                  {selectedCustomer
+                    ? `বকেয়া থেকে সমন্বয় · রিটার্নের পর বকেয়া ৳ ${formatMoney(Number(selectedCustomer.current_balance || 0) - returnTotal)}`
+                    : "কাস্টমারকে নগদ ফেরত"}
+                </span>
+                <strong>৳ {formatMoney(returnTotal)}</strong>
+              </div>
+            ) : null}
+            <footer className="product-form-actions purchase-form-actions">
+              <button className="product-cancel-button" disabled={saving} onClick={onClose} type="button">বাতিল</button>
+              <button className="product-save-button" disabled={saving || loadingItems} type="submit">
+                {saving ? <span className="button-spinner" /> : <Save size={17} />}
+                {saving ? "সংরক্ষণ হচ্ছে..." : "কাস্টমার রিটার্ন সংরক্ষণ"}
+              </button>
+            </footer>
+          </form>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function SalesReceiptMemo({ receipt, shop, onClose, showToast }) {
+  const isCustomerReturn = receipt.document_type === "customer_return";
   useEffect(() => {
     document.body.classList.add("printing-sales-memo");
     return () => document.body.classList.remove("printing-sales-memo");
@@ -2932,7 +3504,7 @@ function SalesReceiptMemo({ receipt, shop, onClose, showToast }) {
     ].join("\n");
     try {
       if (navigator.share) {
-        await navigator.share({ title: "বিক্রয় রসিদ", text: shareText });
+        await navigator.share({ title: isCustomerReturn ? "কাস্টমার রিটার্ন রসিদ" : "বিক্রয় রসিদ", text: shareText });
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareText);
         showToast("success", "রসিদের সারাংশ কপি হয়েছে।");
@@ -2946,10 +3518,10 @@ function SalesReceiptMemo({ receipt, shop, onClose, showToast }) {
 
   return createPortal((
     <div className="product-modal-backdrop sales-print-backdrop">
-      <section aria-label={`বিক্রয় মেমো ${receipt.invoice_number}`} aria-modal="true" className="product-modal sales-modal" role="dialog">
+      <section aria-label={`${isCustomerReturn ? "কাস্টমার রিটার্ন" : "বিক্রয় মেমো"} ${receipt.invoice_number}`} aria-modal="true" className="product-modal sales-modal" role="dialog">
         <header className="product-modal-header no-print">
-          <span className="product-modal-icon"><Receipt size={22} /></span>
-          <div><h2>বিক্রয় মেমো</h2><p>{receipt.invoice_number}</p></div>
+          <span className="product-modal-icon">{isCustomerReturn ? <RotateCcw size={22} /> : <Receipt size={22} />}</span>
+          <div><h2>{isCustomerReturn ? "কাস্টমার রিটার্ন রসিদ" : "বিক্রয় মেমো"}</h2><p>{receipt.invoice_number}</p></div>
           <button aria-label="মেমো বন্ধ করুন" className="product-modal-close" onClick={onClose} type="button"><X size={20} /></button>
         </header>
         <div className="sales-receipt">
@@ -2990,6 +3562,94 @@ function SalesReceiptMemo({ receipt, shop, onClose, showToast }) {
           <div className="sales-receipt-actions no-print">
             <button className="user-action-button sales-receipt-print-button" onClick={() => window.print()} type="button"><Printer size={17} /> প্রিন্ট মেমো</button>
             <button className="user-action-button sales-receipt-share-button" onClick={shareReceipt} type="button"><Share2 size={17} /> শেয়ার</button>
+            <button className="product-save-button" onClick={onClose} type="button">বন্ধ</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  ), document.body);
+}
+
+function ActivityReceiptMemo({ receipt, type, shop, onClose }) {
+  useEffect(() => {
+    document.body.classList.add("printing-sales-memo");
+    return () => document.body.classList.remove("printing-sales-memo");
+  }, []);
+
+  const isPurchase = type === "purchase";
+  const title = isPurchase ? "ক্রয় চালান" : "সাপ্লায়ার পেমেন্ট রসিদ";
+  const reference = isPurchase
+    ? (receipt.bill_number || `ক্রয় #${receipt.id}`)
+    : `সাপ্লায়ার পেমেন্ট #${receipt.id}`;
+  const receiptDate = isPurchase ? receipt.purchase_date : receipt.payment_date;
+  const receiptTime = isPurchase ? receipt.purchase_time : receipt.payment_time;
+  const formattedDate = receiptDate ? new Intl.DateTimeFormat("bn-BD", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+    numberingSystem: "latn",
+  }).format(new Date(`${receiptDate}T00:00:00Z`)) : "—";
+
+  return createPortal((
+    <div className="product-modal-backdrop sales-print-backdrop">
+      <section aria-label={`${title} ${reference}`} aria-modal="true" className="product-modal sales-modal" role="dialog">
+        <header className="product-modal-header no-print">
+          <span className="product-modal-icon"><Receipt size={22} /></span>
+          <div><h2>{title}</h2><p>{reference}</p></div>
+          <button aria-label="মেমো বন্ধ করুন" className="product-modal-close" onClick={onClose} type="button"><X size={20} /></button>
+        </header>
+        <div className="sales-receipt">
+          <div className="sales-receipt-heading">
+            <ShopPrintHeader shop={shop} />
+            <span className="sales-receipt-title">{title}</span>
+            <div className="sales-receipt-meta">
+              <span><strong>{isPurchase ? "চালান নম্বর" : "রসিদ নম্বর"}</strong><b>{reference}</b></span>
+              <span><strong>তারিখ ও সময়</strong><b>{formattedDate}{receiptTime ? ` · ${receiptTime}` : ""}</b></span>
+              <span><strong>সাপ্লায়ার</strong><b>{receipt.supplier_name}</b></span>
+              {receipt.supplier_mobile_number ? <span><strong>মোবাইল</strong><b>{receipt.supplier_mobile_number}</b></span> : null}
+              {receipt.supplier_address ? <span><strong>ঠিকানা</strong><b>{receipt.supplier_address}</b></span> : null}
+              <span><strong>অপারেটর</strong><b>{receipt.operator_name || "—"}</b></span>
+            </div>
+          </div>
+          {isPurchase ? (
+            <>
+              <div className="sales-receipt-lines">
+                <table className="sales-receipt-table">
+                  <thead><tr><th>পণ্যের নাম</th><th>পরিমাণ</th><th>ইউনিট</th><th>দর</th><th>মোট মূল্য</th></tr></thead>
+                  <tbody>{receipt.items.map((item, index) => (
+                    <tr key={`purchase-${index}`}>
+                      <td>{item.product_name}{item.product_code ? <small>{item.product_code}</small> : null}</td>
+                      <td>{numberFormatter.format(Number(item.quantity) || 0)}</td><td>{item.unit || "—"}</td>
+                      <td>৳ {formatMoney(item.unit_price)}</td><td>৳ {formatMoney(item.line_total)}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              <dl className="sales-receipt-summary">
+                <div><dt>পণ্যের গন্তব্য</dt><dd>{receipt.destination_type === "warehouse" ? `গুদাম${receipt.warehouse_name ? ` · ${receipt.warehouse_name}` : ""}` : "দোকান"}</dd></div>
+                <div className="sales-receipt-net"><dt>মোট ক্রয়</dt><dd>৳ {formatMoney(receipt.total_amount)}</dd></div>
+              </dl>
+            </>
+          ) : (
+            <dl className="sales-receipt-summary">
+              <div><dt>পেমেন্ট পদ্ধতি</dt><dd>{receipt.payment_method === "bank" ? "By Bank · ব্যাংক" : "By Cash · নগদ"}</dd></div>
+              {receipt.payment_method === "bank" ? (
+                <div><dt>ব্যাংক হিসাব</dt><dd>{[receipt.bank_name, receipt.account_name, receipt.account_number, receipt.branch_name].filter(Boolean).join(" · ") || "—"}</dd></div>
+              ) : null}
+              <div className="sales-receipt-net"><dt>পরিশোধিত অর্থ</dt><dd>৳ {formatMoney(receipt.payment_amount)}</dd></div>
+            </dl>
+          )}
+          {receipt.notes || receipt.note ? <p className="sales-receipt-note"><strong>নোট:</strong> {receipt.notes || receipt.note}</p> : null}
+          <footer className="sales-receipt-footer">
+            <div className="sales-receipt-signatures">
+              <div><span /><strong>কর্তৃপক্ষের স্বাক্ষর</strong></div>
+              <div><span /><strong>{isPurchase ? "সাপ্লায়ারের স্বাক্ষর" : "গ্রহণকারীর স্বাক্ষর"}</strong></div>
+            </div>
+            <div className="sales-receipt-thanks"><span>এই মেমোটি কম্পিউটার দ্বারা তৈরি।</span></div>
+          </footer>
+          <div className="sales-receipt-actions no-print">
+            <button className="user-action-button sales-receipt-print-button" onClick={() => window.print()} type="button"><Printer size={17} /> প্রিন্ট মেমো</button>
             <button className="product-save-button" onClick={onClose} type="button">বন্ধ</button>
           </div>
         </div>
@@ -3157,6 +3817,261 @@ function SupplierReturnForm({ token, shopId, onClose, onDataChanged, showToast }
               <strong>রিটার্ন মূল্য: ৳ {formatMoney(returnTotal)}</strong>
               <div><button className="product-cancel-button" disabled={saving} onClick={onClose} type="button">বাতিল</button><button className="product-save-button" disabled={saving || loadingItems || !selectedItems.length} type="submit">{saving ? <span className="button-spinner" /> : <Save size={17} />}{saving ? "সংরক্ষণ হচ্ছে..." : "সাপ্লায়ার রিটার্ন সংরক্ষণ"}</button></div>
             </footer>
+          </form>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function SupplierPaymentForm({ token, shopId, shop, onClose, onDataChanged, showToast }) {
+  const [suppliers, setSuppliers] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [supplierId, setSupplierId] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [note, setNote] = useState("");
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const [loadingBanks, setLoadingBanks] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedPaymentId, setSavedPaymentId] = useState(null);
+  const [paymentReceipt, setPaymentReceipt] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest("/suppliers/payment-options.php", { token, shopId })
+      .then((response) => {
+        if (active) setSuppliers(response.data.suppliers);
+      })
+      .catch((error) => {
+        if (active) showToast("error", error.message);
+      })
+      .finally(() => {
+        if (active) setLoadingSuppliers(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, shopId, showToast]);
+
+  useEffect(() => {
+    if (paymentMethod !== "bank") {
+      setBankAccountId("");
+      return undefined;
+    }
+
+    let active = true;
+    setLoadingBanks(true);
+    apiRequest("/banks/list.php", { token, shopId })
+      .then((response) => {
+        if (active) setBankAccounts(response.data.accounts);
+      })
+      .catch((error) => {
+        if (active) showToast("error", error.message);
+      })
+      .finally(() => {
+        if (active) setLoadingBanks(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [paymentMethod, token, shopId, showToast]);
+
+  const selectedSupplier = suppliers.find((supplier) => String(supplier.id) === String(supplierId));
+  const previousDue = Number(selectedSupplier?.current_due || 0);
+  const numericPayment = Number(paymentAmount);
+  const currentDue = previousDue - (Number.isFinite(numericPayment) ? numericPayment : 0);
+
+  async function openSavedPaymentMemo(paymentId) {
+    try {
+      const response = await apiRequest(
+        `/supplier-payments/receipt.php?id=${encodeURIComponent(paymentId)}`,
+        { token, shopId },
+      );
+      setPaymentReceipt(response.data.payment);
+    } catch (error) {
+      showToast("error", `পেমেন্ট সংরক্ষিত হয়েছে, কিন্তু মেমো লোড করা যায়নি: ${error.message}`);
+    }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!selectedSupplier) {
+      showToast("error", "সাপ্লায়ার নির্বাচন করুন।");
+      return;
+    }
+    if (!Number.isFinite(numericPayment) || numericPayment <= 0) {
+      showToast("error", "পেমেন্টের সঠিক পরিমাণ লিখুন।");
+      return;
+    }
+    if (previousDue <= 0 || numericPayment > previousDue) {
+      showToast("error", "পেমেন্টের পরিমাণ বর্তমান বকেয়ার বেশি হতে পারবে না।");
+      return;
+    }
+    if (paymentMethod === "bank" && !bankAccountId) {
+      showToast("error", "ব্যাংক হিসাব নির্বাচন করুন।");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await apiRequest("/supplier-payments/create.php", {
+        method: "POST",
+        token,
+        shopId,
+        body: JSON.stringify({
+          supplier_id: supplierId,
+          payment_amount: paymentAmount,
+          payment_method: paymentMethod,
+          bank_account_id: paymentMethod === "bank" ? bankAccountId : null,
+          note,
+        }),
+      });
+      setSavedPaymentId(response.data.payment.id);
+      showToast(
+        "success",
+        `${response.message} বর্তমান বকেয়া: ৳ ${formatMoney(response.data.payment.current_due)}।`,
+      );
+      onDataChanged();
+      await openSavedPaymentMemo(response.data.payment.id);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (paymentReceipt) {
+    return (
+      <ActivityReceiptMemo
+        onClose={onClose}
+        receipt={paymentReceipt}
+        shop={shop}
+        type="supplier_payment"
+      />
+    );
+  }
+
+  return (
+    <div className="product-modal-backdrop">
+      <section aria-labelledby="supplier-payment-title" aria-modal="true" className="product-modal stock-entry-modal" role="dialog">
+        <header className="product-modal-header">
+          <span className="product-modal-icon"><Wallet size={22} /></span>
+          <div><h2 id="supplier-payment-title">সাপ্লায়ার পেমেন্ট</h2><p>সাপ্লায়ারের বকেয়া থেকে নগদ বা ব্যাংক পেমেন্ট সংরক্ষণ করুন।</p></div>
+          <button aria-label="সাপ্লায়ার পেমেন্ট ফর্ম বন্ধ করুন" className="product-modal-close" disabled={saving} onClick={onClose} type="button"><X size={20} /></button>
+        </header>
+        {loadingSuppliers ? (
+          <div className="user-list-empty"><span className="button-spinner" /> সাপ্লায়ারের বকেয়া লোড হচ্ছে...</div>
+        ) : suppliers.length === 0 ? (
+          <div className="user-list-empty">এই দোকানে কোনো সাপ্লায়ার নেই। আগে সাপ্লায়ার সেটআপ থেকে সাপ্লায়ার যোগ করুন।</div>
+        ) : (
+          <form className="product-form" onSubmit={handleSubmit}>
+            <div className="sales-form-grid">
+              <label className="product-form-field" htmlFor="supplier-payment-supplier">
+                <span className="product-field-label">সাপ্লায়ার</span>
+                <SearchableSelect
+                  id="supplier-payment-supplier"
+                  name="supplier_id"
+                  onChange={(event) => {
+                    setSupplierId(event.target.value);
+                    setPaymentAmount("");
+                  }}
+                  options={[
+                    { value: "", label: "সাপ্লায়ার নির্বাচন করুন" },
+                    ...suppliers.map((supplier) => ({
+                      value: supplier.id,
+                      label: `${supplier.supplier_name}${supplier.address ? ` · ${supplier.address}` : ""}`,
+                    })),
+                  ]}
+                  placeholder="নাম বা ঠিকানা দিয়ে খুঁজুন"
+                  required
+                  value={supplierId}
+                />
+              </label>
+              <div className="product-form-field">
+                <span className="product-field-label">পূর্বের বকেয়া</span>
+                <div aria-label={`পূর্বের বকেয়া ৳ ${formatMoney(previousDue)}`} aria-readonly="true" className="product-field-control sales-summary-readonly" role="textbox">৳ {formatMoney(previousDue)}</div>
+              </div>
+              <label className="product-form-field" htmlFor="supplier-payment-amount">
+                <span className="product-field-label">পেমেন্ট (৳)</span>
+                <input
+                  className="product-field-control"
+                  id="supplier-payment-amount"
+                  max={previousDue > 0 ? previousDue : undefined}
+                  min="0.01"
+                  onChange={(event) => setPaymentAmount(event.target.value)}
+                  required
+                  step="0.01"
+                  type="number"
+                  value={paymentAmount}
+                />
+              </label>
+              <div className="product-form-field">
+                <span className="product-field-label">বর্তমান বকেয়া</span>
+                <div aria-label={`বর্তমান বকেয়া ৳ ${formatMoney(currentDue)}`} aria-readonly="true" className="product-field-control sales-summary-readonly" role="textbox">৳ {formatMoney(currentDue)}</div>
+              </div>
+              <label className="product-form-field" htmlFor="supplier-payment-method">
+                <span className="product-field-label">পেমেন্ট পদ্ধতি</span>
+                <SearchableSelect
+                  id="supplier-payment-method"
+                  name="payment_method"
+                  onChange={(event) => setPaymentMethod(event.target.value)}
+                  options={[
+                    { value: "cash", label: "By Cash · নগদ" },
+                    { value: "bank", label: "By Bank · ব্যাংক" },
+                  ]}
+                  placeholder="পেমেন্ট পদ্ধতি নির্বাচন করুন"
+                  value={paymentMethod}
+                />
+              </label>
+              {paymentMethod === "bank" ? (
+                <label className="product-form-field" htmlFor="supplier-payment-bank">
+                  <span className="product-field-label">ব্যাংক হিসাব</span>
+                  {loadingBanks ? (
+                    <span className="product-field-control">ব্যাংক হিসাব লোড হচ্ছে...</span>
+                  ) : (
+                    <SearchableSelect
+                      id="supplier-payment-bank"
+                      name="bank_account_id"
+                      onChange={(event) => setBankAccountId(event.target.value)}
+                      options={[
+                        { value: "", label: "ব্যাংক হিসাব নির্বাচন করুন" },
+                        ...bankAccounts.map((account) => ({
+                          value: account.id,
+                          label: `${account.bank_name} · ${account.account_name}${account.account_number ? ` · ${account.account_number}` : ""}`,
+                        })),
+                      ]}
+                      placeholder={bankAccounts.length ? "ব্যাংক বা হিসাব দিয়ে খুঁজুন" : "আগে ব্যাংক সেটআপে হিসাব যোগ করুন"}
+                      required
+                      value={bankAccountId}
+                    />
+                  )}
+                  {!loadingBanks && bankAccounts.length === 0 ? <small className="user-management-note">ব্যাংক পেমেন্টের আগে ব্যাংক সেটআপে হিসাব যোগ করুন।</small> : null}
+                </label>
+              ) : null}
+              <label className="product-form-field" htmlFor="supplier-payment-note">
+                <span className="product-field-label">নোট <span className="optional-label">ঐচ্ছিক</span></span>
+                <textarea className="product-field-control customer-address-control" id="supplier-payment-note" maxLength={500} onChange={(event) => setNote(event.target.value)} rows={2} value={note} />
+              </label>
+            </div>
+            {selectedSupplier && previousDue <= 0 ? <p className="user-management-note">এই সাপ্লায়ারের বর্তমানে পরিশোধযোগ্য বকেয়া নেই।</p> : null}
+            <footer className="product-form-actions purchase-form-actions">
+              <strong>পরিশোধযোগ্য বকেয়া: ৳ {formatMoney(Math.max(previousDue, 0))}</strong>
+              <div>
+                <button className="product-cancel-button" disabled={saving} onClick={onClose} type="button">বাতিল</button>
+                <button className="product-save-button" disabled={saving || savedPaymentId !== null || !selectedSupplier || previousDue <= 0 || (paymentMethod === "bank" && (loadingBanks || bankAccounts.length === 0))} type="submit">
+                  {saving ? <span className="button-spinner" /> : <Save size={17} />}
+                  {saving ? "সংরক্ষণ হচ্ছে..." : savedPaymentId !== null ? "পেমেন্ট সংরক্ষিত" : "পেমেন্ট সংরক্ষণ"}
+                </button>
+              </div>
+            </footer>
+            {savedPaymentId !== null ? (
+              <p className="user-management-note">
+                পেমেন্ট সংরক্ষিত হয়েছে। মেমো লোড না হলে{" "}
+                <button className="user-action-button" onClick={() => openSavedPaymentMemo(savedPaymentId)} type="button">মেমো আবার খুলুন</button>।
+              </p>
+            ) : null}
           </form>
         )}
       </section>
@@ -3557,8 +4472,10 @@ function WarehouseStockPanel({ token, shopId, shop, onClose, showToast }) {
                 placeholder="নাম বা কোড দিয়ে খুঁজুন"
                 value={productId}
               />
+            </div>
+            <div className="warehouse-stock-toolbar">
               <strong className="warehouse-stock-count">মোট পণ্য: {formatQuantity(visibleItems.length)}</strong>
-              <button className="user-action-button no-print" disabled={loadingStock || !items.length} onClick={() => window.print()} type="button"><Printer size={16} /> প্রিন্ট</button>
+              <button className="warehouse-stock-print-button no-print" disabled={loadingStock || !items.length} onClick={() => window.print()} type="button"><Printer size={17} /> প্রিন্ট</button>
             </div>
             <div className="warehouse-stock-print-heading">
               <ShopPrintHeader shop={shop} />
@@ -4020,7 +4937,7 @@ function PurchaseReportPanel({ token, shopId, shop, onClose, showToast }) {
         <form className="purchase-report-filters no-print" onSubmit={loadReport}>
           <label><span>তারিখ থেকে</span><input className="product-field-control" max={today} onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))} required type="date" value={filters.date_from} /></label>
           <label><span>তারিখ পর্যন্ত</span><input className="product-field-control" max={today} onChange={(event) => setFilters((current) => ({ ...current, date_to: event.target.value }))} required type="date" value={filters.date_to} /></label>
-          <label><span>সাপ্লায়ার</span><SearchableSelect onChange={(event) => setFilters((current) => ({ ...current, supplier_id: event.target.value }))} options={[{ value: "", label: "সব সাপ্লায়ার" }, ...(report?.suppliers || []).map((supplier) => ({ value: supplier.id, label: supplier.supplier_name }))]} placeholder="সাপ্লায়ারের নাম লিখে খুঁজুন" value={filters.supplier_id} /></label>
+          <label><span>সাপ্লায়ার</span><SearchableSelect onChange={(event) => setFilters((current) => ({ ...current, supplier_id: event.target.value }))} options={[{ value: "", label: "সব সাপ্লায়ার" }, ...(report?.suppliers || []).map((supplier) => ({ value: supplier.id, label: `${supplier.supplier_name}${supplier.address ? ` · ${supplier.address}` : ""}` }))]} placeholder="সাপ্লায়ারের নাম বা ঠিকানা লিখে খুঁজুন" value={filters.supplier_id} /></label>
           <label><span>পণ্যের গন্তব্য</span><SearchableSelect onChange={(event) => setFilters((current) => ({ ...current, destination: event.target.value }))} options={[{ value: "", label: "সব গন্তব্য" }, { value: "shop", label: "দোকান" }, { value: "warehouse", label: "গুদাম" }]} placeholder="গন্তব্য লিখে খুঁজুন" value={filters.destination} /></label>
           <label><span>চালান/সাপ্লায়ার/পণ্য</span><input className="product-field-control" maxLength={120} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} placeholder="নাম, কোড বা চালান নম্বর" value={filters.search} /></label>
           <button className="product-save-button" disabled={loading} type="submit">{loading ? <span className="button-spinner" /> : <BarChart3 size={16} />} রিপোর্ট দেখুন</button>
@@ -4888,6 +5805,90 @@ function WarehouseManagementPanel({ token, onClose, onDataChanged, showToast }) 
   );
 }
 
+function UserPresencePanel({ token, shopId }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!shopId) return undefined;
+    let active = true;
+    let timer;
+
+    async function loadPresence() {
+      try {
+        const response = await apiRequest("/users/presence.php", { token, shopId });
+        if (active) {
+          setUsers(response.data.users);
+          setError("");
+        }
+      } catch (requestError) {
+        if (active) setError(requestError.message);
+      } finally {
+        if (active) {
+          setLoading(false);
+          timer = window.setTimeout(loadPresence, 30_000);
+        }
+      }
+    }
+
+    setLoading(true);
+    loadPresence();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [token, shopId]);
+
+  const formatDateTime = (value) => {
+    if (!value) return "লগইন তথ্য নেই";
+    const date = new Date(value.replace(" ", "T"));
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("bn-BD", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      numberingSystem: "latn",
+    }).format(date);
+  };
+
+  return (
+    <div className="dashboard-presence" aria-live="polite">
+      <div className="dashboard-presence-heading">
+        <h3><Users size={16} /> ইউজার উপস্থিতি</h3>
+        <span>প্রতি ৩০ সেকেন্ডে আপডেট</span>
+      </div>
+      {loading ? (
+        <div className="dashboard-presence-message"><span className="button-spinner" /> তথ্য লোড হচ্ছে...</div>
+      ) : error ? (
+        <div className="dashboard-presence-message dashboard-presence-error" role="alert">{error}</div>
+      ) : users.length ? (
+        <div className="dashboard-presence-list">
+          {users.map((presenceUser) => (
+            <div className="dashboard-presence-item" key={presenceUser.id}>
+              <span className={`presence-status-dot ${presenceUser.is_online ? "presence-online" : ""}`} />
+              <div className="dashboard-presence-user">
+                <strong>
+                  {presenceUser.display_name || presenceUser.username}
+                  {!presenceUser.is_active ? " · নিষ্ক্রিয়" : ""}
+                </strong>
+                <small>শেষ লগইন: {formatDateTime(presenceUser.last_login_at)}</small>
+              </div>
+              <span className={`presence-status-label ${presenceUser.is_online ? "presence-online-label" : ""}`}>
+                {presenceUser.is_online ? "অনলাইন" : "অফলাইন"}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="dashboard-presence-message">এই দোকানে কোনো ইউজার পাওয়া যায়নি।</div>
+      )}
+    </div>
+  );
+}
+
 function WelcomePage({ user, token, onLogout, showToast }) {
   const [activeTab, setActiveTab] = useState(() => (
     user.role === "owner" || user.permissions?.includes("overview")
@@ -4897,9 +5898,11 @@ function WelcomePage({ user, token, onLogout, showToast }) {
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [showSupplierPaymentForm, setShowSupplierPaymentForm] = useState(false);
+  const [showBankSetup, setShowBankSetup] = useState(false);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [showSalesForm, setShowSalesForm] = useState(false);
-  const [salesStartWithReturn, setSalesStartWithReturn] = useState(false);
+  const [showCustomerReturnForm, setShowCustomerReturnForm] = useState(false);
   const [showSupplierReturnForm, setShowSupplierReturnForm] = useState(false);
   const [showDamageStockForm, setShowDamageStockForm] = useState(false);
   const [showStockReport, setShowStockReport] = useState(false);
@@ -4915,13 +5918,17 @@ function WelcomePage({ user, token, onLogout, showToast }) {
   const [dashboardSummaryLoading, setDashboardSummaryLoading] = useState(false);
   const [dashboardSummaryError, setDashboardSummaryError] = useState(false);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [activityMemo, setActivityMemo] = useState(null);
+  const [loadingActivityMemoId, setLoadingActivityMemoId] = useState(null);
   const [activityPage, setActivityPage] = useState(1);
   const [selectedShopId, setSelectedShopId] = useState(user.shop_id || "");
   const displayName = user.display_name || user.username;
+  const activityPageSize = 10;
   const recentActivity = dashboardSummary?.recent_activity || [];
-  const activityPageCount = Math.ceil(recentActivity.length / 3);
+  const activityPageCount = Math.ceil(recentActivity.length / activityPageSize);
   const currentActivityPage = Math.min(activityPage, Math.max(activityPageCount, 1));
-  const visibleActivity = recentActivity.slice((currentActivityPage - 1) * 3, currentActivityPage * 3);
+  const activityPageStart = (currentActivityPage - 1) * activityPageSize;
+  const visibleActivity = recentActivity.slice(activityPageStart, activityPageStart + activityPageSize);
   const activeShop = shops.find((shop) => shop.id === Number(selectedShopId));
   const visibleTabs = DASHBOARD_TABS.filter((tab) => (
     user.role === "owner" || user.permissions?.includes(tab.id)
@@ -4931,6 +5938,39 @@ function WelcomePage({ user, token, onLogout, showToast }) {
   const canEditSetup = user.role === "owner" || user.permissions?.includes("can_edit");
   const canDeleteSetup = user.role === "owner" || user.permissions?.includes("can_delete");
   const refreshDashboardSummary = () => setDashboardRefreshKey((current) => current + 1);
+
+  useEffect(() => {
+    let failed = false;
+    let pending = false;
+    const heartbeat = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        await apiRequest("/auth/heartbeat.php", {
+          method: "POST",
+          token,
+          body: JSON.stringify({}),
+        });
+        failed = false;
+      } catch (error) {
+        if (!failed) showToast("error", error.message);
+        failed = true;
+      } finally {
+        pending = false;
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") heartbeat();
+    };
+
+    heartbeat();
+    const intervalId = window.setInterval(heartbeat, 30_000);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [token, showToast]);
 
   useEffect(() => {
     if (!visibleTabs.some((tab) => tab.id === activeTab) && visibleTabs.length > 0) {
@@ -5001,6 +6041,28 @@ function WelcomePage({ user, token, onLogout, showToast }) {
     sessionStorage.setItem("mitali_shop_id", String(nextShopId));
   }
 
+  async function openActivityMemo(activity) {
+    setLoadingActivityMemoId(`${activity.activity_type}-${activity.activity_id}`);
+    try {
+      const endpoints = {
+        sale: `/sales/receipt.php?id=${encodeURIComponent(activity.activity_id)}`,
+        purchase: `/purchases/receipt.php?id=${encodeURIComponent(activity.activity_id)}`,
+        supplier_payment: `/supplier-payments/receipt.php?id=${encodeURIComponent(activity.activity_id)}`,
+      };
+      const response = await apiRequest(endpoints[activity.activity_type], { token, shopId: selectedShopId });
+      const receipt = activity.activity_type === "sale"
+        ? response.data.sale
+        : activity.activity_type === "purchase"
+          ? response.data.purchase
+          : response.data.payment;
+      setActivityMemo({ type: activity.activity_type, receipt });
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setLoadingActivityMemoId(null);
+    }
+  }
+
   function openModule(module) {
     if (module.key === "user-management") {
       setShowUserManagement(true);
@@ -5030,6 +6092,10 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       setShowSupplierForm(true);
       return;
     }
+    if (module.key === "bank-setup") {
+      setShowBankSetup(true);
+      return;
+    }
     if (module.key === "purchase-create") {
       setShowPurchaseForm(true);
       return;
@@ -5044,6 +6110,10 @@ function WelcomePage({ user, token, onLogout, showToast }) {
     }
     if (module.key === "supplier-return") {
       setShowSupplierReturnForm(true);
+      return;
+    }
+    if (module.key === "supplier-payment") {
+      setShowSupplierPaymentForm(true);
       return;
     }
     if (module.key === "stock-damage") {
@@ -5062,9 +6132,12 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       setShowPurchaseReport(true);
       return;
     }
-    if (module.key === "sales-create" || module.key === "sales-return") {
-      setSalesStartWithReturn(module.key === "sales-return");
+    if (module.key === "sales-create") {
       setShowSalesForm(true);
+      return;
+    }
+    if (module.key === "sales-return") {
+      setShowCustomerReturnForm(true);
       return;
     }
     showToast("info", `${module.title} মডিউলটি পরবর্তী ধাপে চালু হবে।`);
@@ -5078,9 +6151,11 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       "product-setup": ["total_products", "পণ্য"],
       "customer-setup": ["total_customers", "কাস্টমার"],
       "supplier-setup": ["total_suppliers", "সাপ্লায়ার"],
+      "bank-setup": ["total_bank_accounts", "হিসাব"],
       "purchase-create": ["total_purchases", "ক্রয়"],
       "warehouse-transfer": ["total_transfers", "ট্রান্সফার"],
       "supplier-return": ["total_supplier_returns", "রিটার্ন"],
+      "supplier-payment": ["total_supplier_payments", "পেমেন্ট"],
       "stock-damage": ["total_stock_damages", "এন্ট্রি"],
       "sales-create": ["total_sales", "বিক্রয়"],
       "sales-return": ["total_sales_returns", "রিটার্ন"],
@@ -5107,9 +6182,11 @@ function WelcomePage({ user, token, onLogout, showToast }) {
     "product-setup",
     "customer-setup",
     "supplier-setup",
+    "bank-setup",
     "purchase-create",
     "warehouse-transfer",
     "supplier-return",
+    "supplier-payment",
     "stock-damage",
     "sales-create",
     "sales-return",
@@ -5154,6 +6231,33 @@ function WelcomePage({ user, token, onLogout, showToast }) {
           token={token}
         />
       ) : null}
+      {showBankSetup ? (
+        <BankSetupForm
+          onClose={() => setShowBankSetup(false)}
+          onDataChanged={refreshDashboardSummary}
+          canDelete={canDeleteSetup}
+          canEdit={canEditSetup}
+          showToast={showToast}
+          shopId={selectedShopId}
+          token={token}
+        />
+      ) : null}
+      {activityMemo?.type === "sale" ? (
+        <SalesReceiptMemo
+          onClose={() => setActivityMemo(null)}
+          receipt={activityMemo.receipt}
+          shop={activeShop}
+          showToast={showToast}
+        />
+      ) : null}
+      {activityMemo && activityMemo.type !== "sale" ? (
+        <ActivityReceiptMemo
+          onClose={() => setActivityMemo(null)}
+          receipt={activityMemo.receipt}
+          shop={activeShop}
+          type={activityMemo.type}
+        />
+      ) : null}
       {showPurchaseForm ? (
         <PurchaseForm
           onClose={() => setShowPurchaseForm(false)}
@@ -5173,7 +6277,16 @@ function WelcomePage({ user, token, onLogout, showToast }) {
           showToast={showToast}
           shop={activeShop}
           shopId={selectedShopId}
-          startWithReturn={salesStartWithReturn}
+          token={token}
+        />
+      ) : null}
+      {showCustomerReturnForm ? (
+        <CustomerReturnForm
+          onClose={() => setShowCustomerReturnForm(false)}
+          onSaved={refreshDashboardSummary}
+          showToast={showToast}
+          shop={activeShop}
+          shopId={selectedShopId}
           token={token}
         />
       ) : null}
@@ -5182,6 +6295,16 @@ function WelcomePage({ user, token, onLogout, showToast }) {
           onClose={() => setShowSupplierReturnForm(false)}
           onDataChanged={refreshDashboardSummary}
           showToast={showToast}
+          shopId={selectedShopId}
+          token={token}
+        />
+      ) : null}
+      {showSupplierPaymentForm ? (
+        <SupplierPaymentForm
+          onClose={() => setShowSupplierPaymentForm(false)}
+          onDataChanged={refreshDashboardSummary}
+          showToast={showToast}
+          shop={activeShop}
           shopId={selectedShopId}
           token={token}
         />
@@ -5324,6 +6447,84 @@ function WelcomePage({ user, token, onLogout, showToast }) {
           </div>
         </section>
 
+        <section className="dashboard-menu-section">
+          <div className="menu-section-heading">
+            <div>
+              <span className="panel-eyebrow">SHOP MANAGEMENT</span>
+              <h2>দোকান পরিচালনা</h2>
+            </div>
+            <span className="menu-section-hint">বিভাগ বেছে নিয়ে মেনু দেখুন</span>
+          </div>
+
+          {visibleTabs.length > 0 ? <nav className="dashboard-tabs" role="tablist" aria-label="দোকান পরিচালনা বিভাগ">
+            {visibleTabs.map(({ id, label, icon: Icon }) => (
+              <button
+                aria-selected={activeTab === id}
+                className={`dashboard-tab ${activeTab === id ? "dashboard-tab-active" : ""}`}
+                id={`tab-${id}`}
+                key={id}
+                onClick={() => setActiveTab(id)}
+                role="tab"
+                type="button"
+              >
+                <Icon size={17} />
+                {label}
+              </button>
+            ))}
+          </nav> : <div className="overview-tabs-note">আপনার অ্যাকাউন্টে কোনো মেনু ব্যবহারের অনুমতি নেই।</div>}
+
+          {activeTab !== "overview" && activeSection ? (
+            <div
+              aria-labelledby={`tab-${activeTab}`}
+              className="dashboard-module-panel"
+              role="tabpanel"
+            >
+              <div className="module-panel-heading">
+                <div>
+                  <h3>{activeSection.label}</h3>
+                  <p>{activeSection.description}</p>
+                </div>
+                <span className="module-count">
+                  {activeSection.modules.filter(({ key }) => (
+                    (!["user-management", "shop-management", "warehouse-management"].includes(key))
+                    || user.role === "owner"
+                  )).length}টি মেনু
+                </span>
+              </div>
+              <div className="dashboard-module-grid">
+                {activeSection.modules
+                  .filter(({ key }) => key !== "user-management" || user.role === "owner")
+                  .filter(({ key }) => key !== "shop-management" || user.role === "owner")
+                  .filter(({ key }) => key !== "warehouse-management" || user.role === "owner")
+                  .map(({ key: moduleKey, title, detail, icon: Icon }) => (
+                  <button
+                    className="dashboard-module-card"
+                    key={title}
+                    onClick={() => openModule({ key: moduleKey, title })}
+                    type="button"
+                  >
+                    <span className="module-icon"><Icon size={21} /></span>
+                    <span className="module-card-copy">
+                      <strong>{title}</strong>
+                      <small>{detail}</small>
+                    </span>
+                    <ArrowUpRight className="module-arrow" size={17} />
+                    <span className={countedModuleKeys.includes(moduleKey) ? "module-ready-badge" : "module-coming-soon"}>
+                      {moduleBadgeText(moduleKey)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : activeTab === "overview" ? (
+            <div className="overview-tabs-note">
+              <span><LayoutDashboard size={18} /></span>
+              <div><strong>আপনার প্রয়োজনীয় বিভাগ বেছে নিন</strong><small>সেটআপ, ক্রয়, বিক্রয়, ওয়ারেন্টি ও রিপোর্ট—সব মেনু ট্যাব অনুযায়ী সাজানো।</small></div>
+              <ArrowRight size={18} />
+            </div>
+          ) : null}
+        </section>
+
         {user.role === "owner" || user.permissions?.includes("overview") ? (
         <section className="dashboard-metrics" aria-label="দোকানের সারাংশ">
           {DASHBOARD_METRICS.map(({ key, label, icon: Icon, color, note }) => {
@@ -5370,29 +6571,44 @@ function WelcomePage({ user, token, onLogout, showToast }) {
                   <div className="dashboard-activity-list">
                     {visibleActivity.map((activity) => {
                     const isSale = activity.activity_type === "sale";
+                    const isPurchase = activity.activity_type === "purchase";
+                    const isSupplierPayment = activity.activity_type === "supplier_payment";
+                    const activityKind = isSale ? "বিক্রয়" : isPurchase ? "ক্রয়" : "সাপ্লায়ার পেমেন্ট";
+                    const activityKey = `${activity.activity_type}-${activity.activity_id}`;
                     const activityDate = new Date(`${activity.activity_date}T00:00:00`);
                     const formattedDate = Number.isNaN(activityDate.getTime())
                       ? activity.activity_date
                       : new Intl.DateTimeFormat("bn-BD", { day: "numeric", month: "short", numberingSystem: "latn" }).format(activityDate);
                     return (
-                      <article className="dashboard-activity-item" key={`${activity.activity_type}-${activity.reference}-${activity.activity_date}`}>
-                        <span className={`dashboard-activity-icon ${isSale ? "activity-sale" : "activity-purchase"}`}>
-                          {isSale ? <ShoppingCart size={17} /> : <Receipt size={17} />}
+                      <article className="dashboard-activity-item" key={activityKey}>
+                        <span className={`dashboard-activity-icon ${isSale ? "activity-sale" : isPurchase ? "activity-purchase" : "activity-payment"}`}>
+                          {isSale ? <ShoppingCart size={17} /> : isPurchase ? <Receipt size={17} /> : <Wallet size={17} />}
                         </span>
                         <span className="dashboard-activity-details">
-                          <strong>{isSale ? "বিক্রয়" : "ক্রয়"} · {activity.reference}</strong>
+                          <strong>{activityKind} · {activity.reference}</strong>
                           <small>{activity.party} · {formattedDate}</small>
                         </span>
-                        <strong className={`dashboard-activity-amount ${isSale ? "activity-sale-amount" : ""}`}>
-                          ৳ {formatMoney(activity.amount)}
+                        <strong className={`dashboard-activity-amount ${isSale ? "activity-sale-amount" : isSupplierPayment ? "activity-payment-amount" : ""}`}>
+                          {isSupplierPayment ? "− " : ""}৳ {formatMoney(activity.amount)}
                         </strong>
+                        <button
+                          aria-label={`${activityKind} ${activity.reference} মেমো প্রিন্ট করুন`}
+                          className="user-action-button dashboard-activity-print"
+                          disabled={loadingActivityMemoId !== null}
+                          onClick={() => openActivityMemo(activity)}
+                          title="মেমো প্রিন্ট"
+                          type="button"
+                        >
+                          {loadingActivityMemoId === activityKey ? <span className="button-spinner" /> : <Printer size={15} />}
+                          <span>মেমো</span>
+                        </button>
                       </article>
                     );
                     })}
                   </div>
                   {activityPageCount > 1 ? (
                     <div className="dashboard-activity-pagination">
-                      <span>{(currentActivityPage - 1) * 3 + 1}–{Math.min(currentActivityPage * 3, recentActivity.length)} / {recentActivity.length}</span>
+                      <span>{activityPageStart + 1}–{Math.min(activityPageStart + activityPageSize, recentActivity.length)} / {recentActivity.length}</span>
                       <div>
                         <button
                           disabled={currentActivityPage === 1}
@@ -5446,87 +6662,12 @@ function WelcomePage({ user, token, onLogout, showToast }) {
                   <ArrowRight size={17} />
                 </button> : null}
               </div>
+              {user.role === "owner" ? (
+                <UserPresencePanel token={token} shopId={selectedShopId} />
+              ) : null}
             </article>
           </section>
         ) : null}
-
-        <section className="dashboard-menu-section">
-          <div className="menu-section-heading">
-            <div>
-              <span className="panel-eyebrow">SHOP MANAGEMENT</span>
-              <h2>দোকান পরিচালনা</h2>
-            </div>
-            <span className="menu-section-hint">বিভাগ বেছে নিয়ে মেনু দেখুন</span>
-          </div>
-
-          {visibleTabs.length > 0 ? <nav className="dashboard-tabs" role="tablist" aria-label="দোকান পরিচালনা বিভাগ">
-            {visibleTabs.map(({ id, label, icon: Icon }) => (
-              <button
-                aria-selected={activeTab === id}
-                className={`dashboard-tab ${activeTab === id ? "dashboard-tab-active" : ""}`}
-                id={`tab-${id}`}
-                key={id}
-                onClick={() => setActiveTab(id)}
-                role="tab"
-                type="button"
-              >
-                <Icon size={17} />
-                {label}
-              </button>
-            ))}
-          </nav> : <div className="overview-tabs-note">আপনার অ্যাকাউন্টে কোনো মেনু ব্যবহারের অনুমতি নেই। মালিকের সাথে যোগাযোগ করুন।</div>}
-
-          {activeTab !== "overview" && activeSection ? (
-            <div
-              aria-labelledby={`tab-${activeTab}`}
-              className="dashboard-module-panel"
-              role="tabpanel"
-            >
-              <div className="module-panel-heading">
-                <div>
-                  <h3>{activeSection.label}</h3>
-                  <p>{activeSection.description}</p>
-                </div>
-                <span className="module-count">
-                  {activeSection.modules.filter(({ key }) => (
-                    (!["user-management", "shop-management", "warehouse-management"].includes(key))
-                    || user.role === "owner"
-                  )).length}টি মেনু
-                </span>
-              </div>
-              <div className="dashboard-module-grid">
-                {activeSection.modules
-                  .filter(({ key }) => key !== "user-management" || user.role === "owner")
-                  .filter(({ key }) => key !== "shop-management" || user.role === "owner")
-                  .filter(({ key }) => key !== "warehouse-management" || user.role === "owner")
-                  .map(({ key: moduleKey, title, detail, icon: Icon }) => (
-                  <button
-                    className="dashboard-module-card"
-                    key={title}
-                    onClick={() => openModule({ key: moduleKey, title })}
-                    type="button"
-                  >
-                    <span className="module-icon"><Icon size={21} /></span>
-                    <span className="module-card-copy">
-                      <strong>{title}</strong>
-                      <small>{detail}</small>
-                    </span>
-                    <ArrowUpRight className="module-arrow" size={17} />
-                    <span className={countedModuleKeys.includes(moduleKey) ? "module-ready-badge" : "module-coming-soon"}>
-                      {moduleBadgeText(moduleKey)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : activeTab === "overview" ? (
-            <div className="overview-tabs-note">
-              <span><LayoutDashboard size={18} /></span>
-              <div><strong>আপনার প্রয়োজনীয় বিভাগ বেছে নিন</strong><small>সেটআপ, ক্রয়, বিক্রয়, ওয়ারেন্টি ও রিপোর্ট—সব মেনু ট্যাব অনুযায়ী সাজানো।</small></div>
-              <ArrowRight size={18} />
-            </div>
-          ) : null}
-        </section>
 
         <footer className="dashboard-footer">
           <span>© {new Date().getFullYear()} মেসার্স মিতালী রেডিও ইলেকট্রিক · ফেনী</span>
@@ -5602,10 +6743,20 @@ export default function App() {
     }
   }
 
-  function handleLogout() {
-    sessionStorage.removeItem("mitali_token");
-    setSession(null);
-    showToast("success", "আপনি সফলভাবে লগআউট করেছেন।");
+  async function handleLogout() {
+    try {
+      await apiRequest("/auth/logout.php", {
+        method: "POST",
+        token: session?.token,
+        body: JSON.stringify({}),
+      });
+      showToast("success", "আপনি সফলভাবে লগআউট করেছেন।");
+    } catch (error) {
+      showToast("error", `লগআউটের উপস্থিতি আপডেট করা যায়নি। ${error.message}`);
+    } finally {
+      sessionStorage.removeItem("mitali_token");
+      setSession(null);
+    }
   }
 
   return (

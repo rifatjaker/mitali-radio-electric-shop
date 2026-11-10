@@ -8,7 +8,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
 }
 
 $user = authenticatedUser();
-requirePermission($user, 'reports');
+if (!userHasPermission($user, 'overview') && !userHasPermission($user, 'reports')) {
+    respond(403, false, 'বিক্রয় মেমো দেখার অনুমতি আপনার অ্যাকাউন্টে নেই।');
+}
 $shopId = authorizedShopId($user);
 $saleId = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
 if ($saleId === false || $saleId === null || $saleId < 1) {
