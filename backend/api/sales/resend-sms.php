@@ -43,7 +43,7 @@ try {
         - (float) $sale['discount_amount'] - (float) $sale['sales_return_amount']
         - (float) $sale['special_discount_amount'];
     $message = sprintf(
-        'প্রিয় %s, আপনার বিক্রয় মেমো %s। মোট বিল ৳%s, জমা ৳%s, বর্তমান বাকি ৳%s। ধন্যবাদ।',
+        'প্রিয় %s, আপনার বিক্রয় মেমো %s। মোট বিল ৳%s, জমা ৳%s, বর্তমান বাকি ৳%s। ধন্যবাদ। মেসার্স মিতালী রেডিও ইলেকট্রিক, ফেনী',
         $sale['customer_name'] ?: 'কাস্টমার',
         $sale['invoice_number'],
         formatSmsMoney($billAmount),

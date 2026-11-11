@@ -834,7 +834,7 @@ try {
         $billAmount = (float) $subtotal + (float) $vatAmount
             - (float) $discountAmount - $returnTotal - (float) $specialDiscountAmount;
         $smsText = sprintf(
-            'প্রিয় %s, আপনার বিক্রয় মেমো %s। মোট বিল ৳%s, জমা ৳%s, বর্তমান বাকি ৳%s। ধন্যবাদ।',
+            'প্রিয় %s, আপনার বিক্রয় মেমো %s। মোট বিল ৳%s, জমা ৳%s, বর্তমান বাকি ৳%s। ধন্যবাদ। মেসার্স মিতালী রেডিও ইলেকট্রিক, ফেনী',
             $resolvedCustomerName,
             $invoiceNumber,
             formatSmsMoney($billAmount),
