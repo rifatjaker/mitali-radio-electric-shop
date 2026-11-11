@@ -6773,6 +6773,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [activityMemo, setActivityMemo] = useState(null);
   const [loadingActivityMemoId, setLoadingActivityMemoId] = useState(null);
+  const [resendingActivitySmsId, setResendingActivitySmsId] = useState(null);
   const [activityPage, setActivityPage] = useState(1);
   const [selectedShopId, setSelectedShopId] = useState(user.shop_id || "");
   const displayName = user.display_name || user.username;
@@ -6939,6 +6940,23 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       showToast("error", error.message);
     } finally {
       setLoadingActivityMemoId(null);
+    }
+  }
+
+  async function resendActivitySms(activity) {
+    setResendingActivitySmsId(activity.activity_id);
+    try {
+      const response = await apiRequest("/sales/resend-sms.php", {
+        method: "POST",
+        token,
+        shopId: selectedShopId,
+        body: JSON.stringify({ sale_id: activity.activity_id }),
+      });
+      showToast("success", response.message);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setResendingActivitySmsId(null);
     }
   }
 
@@ -7541,6 +7559,21 @@ function WelcomePage({ user, token, onLogout, showToast }) {
                           {loadingActivityMemoId === activityKey ? <span className="button-spinner" /> : <Printer size={15} />}
                           <span>মেমো</span>
                         </button>
+                        {isSale && canManageSales ? (
+                          <button
+                            aria-label={`${activity.reference} SMS আবার পাঠান`}
+                            className="user-action-button dashboard-activity-print"
+                            disabled={resendingActivitySmsId !== null}
+                            onClick={() => resendActivitySms(activity)}
+                            title="SMS আবার পাঠান"
+                            type="button"
+                          >
+                            {resendingActivitySmsId === activity.activity_id
+                              ? <span className="button-spinner" />
+                              : <MessageSquareText size={15} />}
+                            <span>SMS</span>
+                          </button>
+                        ) : null}
                       </article>
                     );
                     })}

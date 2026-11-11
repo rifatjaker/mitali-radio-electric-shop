@@ -828,21 +828,14 @@ try {
             'shop_id' => $shopId,
         ]);
     }
-    $smsShopName = 'মিতালী রেডিও ইলেকট্রিক';
-    if ($customerId !== null) {
-        $shopNameQuery = $pdo->prepare('SELECT shop_name FROM shops WHERE id = :shop_id');
-        $shopNameQuery->execute(['shop_id' => $shopId]);
-        $smsShopName = (string) ($shopNameQuery->fetchColumn() ?: $smsShopName);
-    }
     $pdo->commit();
     $sms = null;
     if ($customerId !== null) {
         $billAmount = (float) $subtotal + (float) $vatAmount
             - (float) $discountAmount - $returnTotal - (float) $specialDiscountAmount;
         $smsText = sprintf(
-            'প্রিয় %s, %s এর বিক্রয় মেমো %s। মোট বিল ৳%s, জমা ৳%s, বর্তমান বাকি ৳%s। ধন্যবাদ।',
+            'প্রিয় %s, আপনার বিক্রয় মেমো %s। মোট বিল ৳%s, জমা ৳%s, বর্তমান বাকি ৳%s। ধন্যবাদ।',
             $resolvedCustomerName,
-            $smsShopName,
             $invoiceNumber,
             formatSmsMoney($billAmount),
             formatSmsMoney((float) $paymentReceived),
