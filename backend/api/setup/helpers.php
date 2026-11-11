@@ -42,7 +42,10 @@ function setupReferenceExists(PDO $pdo, array $tableColumns, string $column, int
 function setupForeignKeyReferenceExists(PDO $pdo, string $parentTable, int $recordId): bool
 {
     $references = [
-        'customers' => [['sales', 'customer_id']],
+        'customers' => [
+            ['sales', 'customer_id'],
+            ['customer_payments', 'customer_id'],
+        ],
         'products' => [
             ['purchase_items', 'product_id'],
             ['sale_items', 'product_id'],

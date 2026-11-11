@@ -26,7 +26,7 @@ try {
         $customer['id'] = (int) $customer['id'];
         $customer['has_transactions'] = setupReferenceExists(
             $pdo,
-            ['sales', 'sale_bills', 'sales_bills', 'sale_items', 'sales_items'],
+            ['sales', 'sale_bills', 'sales_bills', 'sale_items', 'sales_items', 'customer_payments'],
             'customer_id',
             $customer['id'],
         ) || setupForeignKeyReferenceExists($pdo, 'customers', $customer['id']);

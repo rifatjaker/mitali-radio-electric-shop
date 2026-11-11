@@ -54,6 +54,27 @@ CREATE TABLE IF NOT EXISTS user_presence_sessions (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS delete_audit_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  shop_id BIGINT UNSIGNED NULL,
+  actor_user_id BIGINT UNSIGNED NOT NULL,
+  actor_name VARCHAR(120) NOT NULL,
+  actor_username VARCHAR(80) NOT NULL,
+  entity_type VARCHAR(40) NOT NULL,
+  record_id BIGINT UNSIGNED NOT NULL,
+  record_label VARCHAR(255) NOT NULL,
+  reason VARCHAR(1000) NOT NULL,
+  deleted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_delete_audit_shop_date (shop_id, deleted_at),
+  KEY idx_delete_audit_actor_date (actor_user_id, deleted_at),
+  KEY idx_delete_audit_type_date (entity_type, deleted_at),
+  CONSTRAINT fk_delete_audit_actor
+    FOREIGN KEY (actor_user_id) REFERENCES users (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS warehouses (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   warehouse_name VARCHAR(180) NOT NULL,
@@ -190,6 +211,38 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
     ON UPDATE CASCADE
     ON DELETE RESTRICT,
   CONSTRAINT fk_supplier_payments_created_by
+    FOREIGN KEY (created_by) REFERENCES users (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS customer_payments (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  shop_id BIGINT UNSIGNED NOT NULL,
+  customer_id BIGINT UNSIGNED NOT NULL,
+  payment_amount DECIMAL(12, 2) NOT NULL,
+  payment_method ENUM('cash', 'bank') NOT NULL,
+  bank_account_id BIGINT UNSIGNED NULL,
+  note VARCHAR(500) NULL,
+  created_by BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_customer_payments_shop_date (shop_id, created_at),
+  KEY idx_customer_payments_customer (customer_id),
+  KEY idx_customer_payments_bank_account (bank_account_id),
+  CONSTRAINT fk_customer_payments_shop
+    FOREIGN KEY (shop_id) REFERENCES shops (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_customer_payments_customer
+    FOREIGN KEY (customer_id) REFERENCES customers (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_customer_payments_bank_account
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts (id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_customer_payments_created_by
     FOREIGN KEY (created_by) REFERENCES users (id)
     ON UPDATE CASCADE
     ON DELETE RESTRICT

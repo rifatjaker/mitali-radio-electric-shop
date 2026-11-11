@@ -13,7 +13,7 @@ const USER_PERMISSION_KEYS = [
     'can_delete',
 ];
 const MAX_ACTIVE_SHOPS = 3;
-const MAX_WAREHOUSES = 3;
+const MAX_WAREHOUSES = 6;
 
 function loadEnvironment(): void
 {

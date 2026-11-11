@@ -57,7 +57,7 @@ try {
     }
 
     $statement = $pdo->prepare(
-        'SELECT pb.id AS purchase_id, pb.bill_number, pb.purchase_date,
+        'SELECT pb.id AS purchase_id, pb.bill_number, pb.purchase_date, pb.warehouse_id,
                 pb.destination_type, pb.total_amount, pb.notes,
                 su.id AS supplier_id, su.supplier_name,
                 w.warehouse_name,
@@ -123,6 +123,7 @@ try {
                 'bill_number' => $row['bill_number'],
                 'purchase_date' => $row['purchase_date'],
                 'destination_type' => $row['destination_type'],
+                'warehouse_id' => $row['warehouse_id'] === null ? null : (int) $row['warehouse_id'],
                 'warehouse_name' => $row['warehouse_name'],
                 'supplier_id' => (int) $row['supplier_id'],
                 'supplier_name' => $row['supplier_name'],

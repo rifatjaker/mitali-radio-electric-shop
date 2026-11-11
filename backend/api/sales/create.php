@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/sms.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     respond(405, false, 'বিক্রয় বিল সংরক্ষণ করতে POST অনুরোধ পাঠান।');
@@ -11,6 +12,16 @@ $user = authenticatedUser();
 requirePermission($user, 'sales');
 $shopId = authorizedShopId($user);
 $body = requestJson();
+$editSaleId = null;
+if (isset($body['sale_id']) && $body['sale_id'] !== '') {
+    $editSaleId = filter_var($body['sale_id'], FILTER_VALIDATE_INT);
+    if ($editSaleId === false || $editSaleId < 1) {
+        respond(422, false, 'সঠিক বিক্রয় বিল নির্বাচন করুন।');
+    }
+}
+if ($editSaleId !== null && !userHasPermission($user, 'can_edit')) {
+    respond(403, false, 'বিক্রয় বিল সম্পাদনার অনুমতি আপনার অ্যাকাউন্টে নেই।');
+}
 
 function salesAmount(array $body, string $key, string $label): string
 {
@@ -150,6 +161,152 @@ try {
     $pdo = database();
     $pdo->beginTransaction();
 
+    $existingSale = null;
+    $existingItems = [];
+    if ($editSaleId !== null) {
+        $existingSaleQuery = $pdo->prepare(
+            'SELECT * FROM sales WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
+        );
+        $existingSaleQuery->execute(['id' => $editSaleId, 'shop_id' => $shopId]);
+        $existingSale = $existingSaleQuery->fetch();
+        if (!$existingSale) {
+            $pdo->rollBack();
+            respond(404, false, 'সম্পাদনার জন্য বিক্রয় বিলটি পাওয়া যায়নি।');
+        }
+        if ((int) $existingSale['customer_id'] !== (int) $customerId
+            || $existingSale['sale_source'] !== $saleSource
+            || (int) ($existingSale['warehouse_id'] ?? 0) !== (int) ($warehouseId ?? 0)
+            || $existingSale['sale_date'] !== $saleDate) {
+            $pdo->rollBack();
+            respond(422, false, 'সম্পাদনায় কাস্টমার, তারিখ ও বিক্রয়ের স্থান অপরিবর্তিত রাখতে হবে।');
+        }
+        $returnCheck = $pdo->prepare(
+            'SELECT 1
+             FROM sale_returns sr
+             LEFT JOIN sale_items source_item ON source_item.id = sr.original_sale_item_id
+             WHERE sr.sale_id = :sale_id OR source_item.sale_id = :source_sale_id
+             LIMIT 1'
+        );
+        $returnCheck->execute(['sale_id' => $editSaleId, 'source_sale_id' => $editSaleId]);
+        if ($returnCheck->fetchColumn()) {
+            $pdo->rollBack();
+            respond(409, false, 'এই বিলে কাস্টমার রিটার্ন যুক্ত আছে; রিটার্নযুক্ত বিল সম্পাদনা করা যাবে না।');
+        }
+        $itemQuery = $pdo->prepare(
+            'SELECT id, product_id, quantity FROM sale_items WHERE sale_id = :sale_id FOR UPDATE'
+        );
+        $itemQuery->execute(['sale_id' => $editSaleId]);
+        $existingItems = $itemQuery->fetchAll();
+        $dependencyCheck = $pdo->prepare(
+            'SELECT 1 FROM sales later
+             WHERE later.shop_id = :shop_id AND later.id <> :sale_id
+               AND later.created_at > :created_at AND later.customer_id = :customer_id
+             LIMIT 1'
+        );
+        if ($existingSale['customer_id'] !== null) {
+            $dependencyCheck->execute([
+                'shop_id' => $shopId,
+                'sale_id' => $editSaleId,
+                'created_at' => $existingSale['created_at'],
+                'customer_id' => $existingSale['customer_id'],
+            ]);
+            if ($dependencyCheck->fetchColumn()) {
+                $pdo->rollBack();
+                respond(409, false, 'এই কাস্টমারের পরবর্তী বিক্রয় আছে; বকেয়ার হিসাব নিরাপদ রাখতে বিল সম্পাদনা বন্ধ।');
+            }
+        }
+        $productIdsToCheck = array_values(array_unique(array_map(
+            static fn(array $item): int => (int) $item['product_id'],
+            $existingItems
+        )));
+        if ($productIdsToCheck !== []) {
+            $placeholders = implode(',', array_fill(0, count($productIdsToCheck), '?'));
+            $laterSaleCheck = $pdo->prepare(
+                'SELECT 1 FROM sale_items later_item
+                 INNER JOIN sales later ON later.id = later_item.sale_id
+                 WHERE later.shop_id = ? AND later.id <> ? AND later.created_at > ?
+                   AND later.sale_source = ? AND later.warehouse_id <=> ?
+                   AND later_item.product_id IN (' . $placeholders . ')
+                 LIMIT 1'
+            );
+            $laterSaleCheck->execute(array_merge([
+                $shopId,
+                $editSaleId,
+                $existingSale['created_at'],
+                $saleSource,
+                $warehouseId,
+            ], $productIdsToCheck));
+            if ($laterSaleCheck->fetchColumn()) {
+                $pdo->rollBack();
+                respond(409, false, 'এই বিলের পণ্যে পরবর্তী বিক্রয় আছে; FIFO হিসাব নিরাপদ রাখতে বিল সম্পাদনা বন্ধ।');
+            }
+            $transferCheck = $pdo->prepare(
+                'SELECT 1 FROM warehouse_stock_transfer_items ti
+                 INNER JOIN warehouse_stock_transfers t ON t.id = ti.transfer_id
+                 WHERE t.shop_id = ? AND t.created_at > ?
+                   AND ti.product_id IN (' . $placeholders . ')
+                   AND (? = \'shop\' OR t.warehouse_id = ?)
+                 LIMIT 1'
+            );
+            $transferCheck->execute(array_merge(
+                [$shopId, $existingSale['created_at']],
+                $productIdsToCheck,
+                [$saleSource, $warehouseId]
+            ));
+            if ($transferCheck->fetchColumn()) {
+                $pdo->rollBack();
+                respond(409, false, 'এই বিলের পণ্যে পরবর্তী গুদাম স্থানান্তর আছে; বিল সম্পাদনা বন্ধ।');
+            }
+        }
+        $restoreShopStock = $pdo->prepare(
+            'UPDATE products SET current_stock = current_stock + :quantity
+             WHERE id = :product_id AND shop_id = :shop_id'
+        );
+        $restoreWarehouseStock = $pdo->prepare(
+            'INSERT INTO warehouse_stock (warehouse_id, product_id, quantity)
+             VALUES (:warehouse_id, :product_id, :quantity)
+             ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)'
+        );
+        foreach ($existingItems as $item) {
+            if ($saleSource === 'shop') {
+                $restoreShopStock->execute([
+                    'quantity' => $item['quantity'],
+                    'product_id' => $item['product_id'],
+                    'shop_id' => $shopId,
+                ]);
+            } else {
+                $restoreWarehouseStock->execute([
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                ]);
+            }
+        }
+        $allocationQuery = $pdo->prepare(
+            'SELECT sca.id, sca.stock_cost_layer_id, sca.quantity
+             FROM sale_cost_allocations sca
+             INNER JOIN sale_items si ON si.id = sca.sale_item_id
+             WHERE si.sale_id = :sale_id FOR UPDATE'
+        );
+        $allocationQuery->execute(['sale_id' => $editSaleId]);
+        $restoreLayer = $pdo->prepare(
+            'UPDATE stock_cost_layers SET remaining_quantity = remaining_quantity + :quantity WHERE id = :id'
+        );
+        foreach ($allocationQuery->fetchAll() as $allocation) {
+            $restoreLayer->execute([
+                'quantity' => $allocation['quantity'],
+                'id' => $allocation['stock_cost_layer_id'],
+            ]);
+        }
+        $deleteAllocations = $pdo->prepare(
+            'DELETE sca FROM sale_cost_allocations sca
+             INNER JOIN sale_items si ON si.id = sca.sale_item_id WHERE si.sale_id = :sale_id'
+        );
+        $deleteAllocations->execute(['sale_id' => $editSaleId]);
+        $deleteItems = $pdo->prepare('DELETE FROM sale_items WHERE sale_id = :sale_id');
+        $deleteItems->execute(['sale_id' => $editSaleId]);
+    }
+
     $previousDue = 0.0;
     $resolvedCustomerName = $customerName;
     if ($customerId !== null) {
@@ -164,6 +321,10 @@ try {
             respond(422, false, 'নির্বাচিত কাস্টমার এই দোকানের নয়।');
         }
         $previousDue = (float) ($customer['current_balance'] ?? 0);
+        if ($existingSale !== null) {
+            $previousDue -= (float) $existingSale['net_amount']
+                - (float) $existingSale['previous_due_amount'];
+        }
         $resolvedCustomerName = $customer['customer_name'];
     }
 
@@ -426,26 +587,12 @@ try {
         }
     }
 
-    $bill = $pdo->prepare(
-        'INSERT INTO sales (
-            shop_id, customer_id, sale_source, warehouse_id, customer_name, invoice_number, sale_date,
-            subtotal, vat_amount, discount_amount, special_discount_amount,
-            previous_due_amount, sales_return_amount, net_amount, payment_method,
-            payment_received, cash_refund_amount, present_due, notes, created_by
-         ) VALUES (
-             :shop_id, :customer_id, :sale_source, :warehouse_id, :customer_name, :invoice_number, :sale_date,
-            :subtotal, :vat_amount, :discount_amount, :special_discount_amount,
-            :previous_due_amount, :sales_return_amount, :net_amount, :payment_method,
-            :payment_received, :cash_refund_amount, :present_due, :notes, :created_by
-         )'
-    );
-    $bill->execute([
+    $saleValues = [
         'shop_id' => $shopId,
         'customer_id' => $customerId,
         'sale_source' => $saleSource,
         'warehouse_id' => $warehouseId,
         'customer_name' => $resolvedCustomerName,
-        'invoice_number' => null,
         'sale_date' => $saleDate,
         'subtotal' => $subtotal,
         'vat_amount' => $vatAmount,
@@ -459,12 +606,57 @@ try {
         'cash_refund_amount' => $cashRefund,
         'present_due' => $presentDue,
         'notes' => $notes,
-        'created_by' => $user['id'],
-    ]);
-    $saleId = (int) $pdo->lastInsertId();
-    $invoiceNumber = sprintf('MRE-%d-%s-%06d', $shopId, date('ymd'), $saleId);
-    $updateInvoice = $pdo->prepare('UPDATE sales SET invoice_number = :invoice_number WHERE id = :id');
-    $updateInvoice->execute(['invoice_number' => $invoiceNumber, 'id' => $saleId]);
+    ];
+    if ($editSaleId !== null) {
+        $saleId = $editSaleId;
+        $invoiceNumber = $existingSale['invoice_number'];
+        $bill = $pdo->prepare(
+            'UPDATE sales SET customer_name = :customer_name, subtotal = :subtotal,
+                vat_amount = :vat_amount, discount_amount = :discount_amount,
+                special_discount_amount = :special_discount_amount,
+                previous_due_amount = :previous_due_amount, sales_return_amount = :sales_return_amount,
+                net_amount = :net_amount, payment_method = :payment_method,
+                payment_received = :payment_received, cash_refund_amount = :cash_refund_amount,
+                present_due = :present_due, notes = :notes
+             WHERE id = :id AND shop_id = :shop_id'
+        );
+        $bill->execute([
+            'customer_name' => $saleValues['customer_name'],
+            'subtotal' => $saleValues['subtotal'],
+            'vat_amount' => $saleValues['vat_amount'],
+            'discount_amount' => $saleValues['discount_amount'],
+            'special_discount_amount' => $saleValues['special_discount_amount'],
+            'previous_due_amount' => $saleValues['previous_due_amount'],
+            'sales_return_amount' => $saleValues['sales_return_amount'],
+            'net_amount' => $saleValues['net_amount'],
+            'payment_method' => $saleValues['payment_method'],
+            'payment_received' => $saleValues['payment_received'],
+            'cash_refund_amount' => $saleValues['cash_refund_amount'],
+            'present_due' => $saleValues['present_due'],
+            'notes' => $saleValues['notes'],
+            'id' => $saleId,
+            'shop_id' => $shopId,
+        ]);
+    } else {
+        $bill = $pdo->prepare(
+            'INSERT INTO sales (
+                shop_id, customer_id, sale_source, warehouse_id, customer_name, invoice_number, sale_date,
+                subtotal, vat_amount, discount_amount, special_discount_amount,
+                previous_due_amount, sales_return_amount, net_amount, payment_method,
+                payment_received, cash_refund_amount, present_due, notes, created_by
+             ) VALUES (
+                 :shop_id, :customer_id, :sale_source, :warehouse_id, :customer_name, NULL, :sale_date,
+                :subtotal, :vat_amount, :discount_amount, :special_discount_amount,
+                :previous_due_amount, :sales_return_amount, :net_amount, :payment_method,
+                :payment_received, :cash_refund_amount, :present_due, :notes, :created_by
+             )'
+        );
+        $bill->execute(array_merge($saleValues, ['created_by' => $user['id']]));
+        $saleId = (int) $pdo->lastInsertId();
+        $invoiceNumber = sprintf('MRE-%d-%s-%06d', $shopId, date('ymd'), $saleId);
+        $updateInvoice = $pdo->prepare('UPDATE sales SET invoice_number = :invoice_number WHERE id = :id');
+        $updateInvoice->execute(['invoice_number' => $invoiceNumber, 'id' => $saleId]);
+    }
     $saleTimeQuery = $pdo->prepare('SELECT DATE_FORMAT(created_at, \'%H:%i\') FROM sales WHERE id = :id');
     $saleTimeQuery->execute(['id' => $saleId]);
     $saleTime = (string) $saleTimeQuery->fetchColumn();
@@ -479,6 +671,7 @@ try {
          WHERE shop_id = :shop_id AND product_id = :product_id
            AND location_type = :location_type
            AND warehouse_id <=> :warehouse_id
+           AND (:edit_sale_id IS NULL OR received_date <= :sale_date)
            AND remaining_quantity > 0
          ORDER BY received_date, id
          FOR UPDATE'
@@ -513,6 +706,8 @@ try {
             'product_id' => $item['product_id'],
             'location_type' => $saleSource,
             'warehouse_id' => $warehouseId,
+            'edit_sale_id' => $editSaleId,
+            'sale_date' => $saleDate,
         ]);
         $layers = $costLayerQuery->fetchAll();
         $availableCostStock = array_sum(array_map(
@@ -633,8 +828,34 @@ try {
             'shop_id' => $shopId,
         ]);
     }
+    $smsShopName = 'মিতালী রেডিও ইলেকট্রিক';
+    if ($customerId !== null) {
+        $shopNameQuery = $pdo->prepare('SELECT shop_name FROM shops WHERE id = :shop_id');
+        $shopNameQuery->execute(['shop_id' => $shopId]);
+        $smsShopName = (string) ($shopNameQuery->fetchColumn() ?: $smsShopName);
+    }
     $pdo->commit();
-    respond(201, true, 'বিক্রয় বিল সংরক্ষণ হয়েছে।', [
+    $sms = null;
+    if ($customerId !== null) {
+        $billAmount = (float) $subtotal + (float) $vatAmount
+            - (float) $discountAmount - $returnTotal - (float) $specialDiscountAmount;
+        $smsText = sprintf(
+            'প্রিয় %s, %s এর বিক্রয় মেমো %s। মোট বিল ৳%s, জমা ৳%s, বর্তমান বাকি ৳%s। ধন্যবাদ।',
+            $resolvedCustomerName,
+            $smsShopName,
+            $invoiceNumber,
+            formatSmsMoney($billAmount),
+            formatSmsMoney((float) $paymentReceived),
+            formatSmsMoney((float) $presentDue)
+        );
+        $sms = sendCustomerSms($customer['mobile_number'] ?? null, $smsText);
+    }
+    $responseMessage = $editSaleId === null ? 'বিক্রয় বিল সংরক্ষণ হয়েছে।' : 'বিক্রয় বিল সম্পাদনা হয়েছে।';
+    if ($sms !== null) {
+        $responseMessage .= ' ' . $sms['message'];
+    }
+    respond($editSaleId === null ? 201 : 200, true, $responseMessage, [
+        'sms' => $sms,
         'sale' => [
             'id' => $saleId,
             'customer_id' => $customerId,

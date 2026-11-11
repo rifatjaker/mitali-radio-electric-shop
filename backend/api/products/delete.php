@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/setup/helpers.php';
+require_once dirname(__DIR__) . '/delete-audit.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     respond(405, false, 'পণ্য মুছতে POST অনুরোধ পাঠান।');
@@ -18,12 +19,13 @@ $productId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
 if ($productId === false || $productId === null || $productId < 1) {
     respond(422, false, 'সঠিক পণ্য নির্বাচন করুন।');
 }
+$reason = validatedDeletionReason($body);
 
 try {
     $pdo = database();
     $pdo->beginTransaction();
     $statement = $pdo->prepare(
-        'SELECT current_stock FROM products WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
+        'SELECT product_name, current_stock FROM products WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
     );
     $statement->execute(['id' => $productId, 'shop_id' => $shopId]);
     $product = $statement->fetch();
@@ -44,6 +46,7 @@ try {
         respond(409, false, 'ক্রয়/বিক্রয়/ওয়ারেন্টি লেনদেন বা স্টক থাকা পণ্য মুছবেন না। পণ্যের তথ্য সম্পাদনা করুন।');
     }
 
+    recordDeletionAudit($pdo, $shopId, $user, 'product', (int) $productId, $product['product_name'], $reason);
     $delete = $pdo->prepare('DELETE FROM products WHERE id = :id AND shop_id = :shop_id');
     $delete->execute(['id' => $productId, 'shop_id' => $shopId]);
     $pdo->commit();

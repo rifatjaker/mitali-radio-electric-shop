@@ -76,6 +76,11 @@ try {
             ) AS total_supplier_payments,
             (
                 SELECT COUNT(*)
+                FROM customer_payments
+                WHERE shop_id = :total_customer_payments_shop_id
+            ) AS total_customer_payments,
+            (
+                SELECT COUNT(*)
                 FROM stock_adjustments
                 WHERE shop_id = :total_stock_damages_shop_id
             ) AS total_stock_damages,
@@ -117,6 +122,7 @@ try {
         'total_sales_returns_shop_id' => $shopId,
         'total_supplier_returns_shop_id' => $shopId,
         'total_supplier_payments_shop_id' => $shopId,
+        'total_customer_payments_shop_id' => $shopId,
         'total_stock_damages_shop_id' => $shopId,
         'total_transfers_shop_id' => $shopId,
         'total_users_shop_id' => $shopId,
@@ -163,6 +169,17 @@ try {
             FROM supplier_payments sp
             INNER JOIN suppliers su ON su.id = sp.supplier_id
             WHERE sp.shop_id = :activity_supplier_payments_shop_id
+            UNION ALL
+            SELECT \'customer_payment\' AS activity_type,
+                   CONCAT(\'আদায় #\', cp.id) AS reference,
+                   c.customer_name AS party,
+                   cp.payment_amount AS amount,
+                   DATE(cp.created_at) AS activity_date,
+                   cp.created_at AS sort_date,
+                   cp.id AS activity_id
+            FROM customer_payments cp
+            INNER JOIN customers c ON c.id = cp.customer_id
+            WHERE cp.shop_id = :activity_customer_payments_shop_id
          ) activity
          ORDER BY sort_date DESC, activity_type, activity_id DESC
          LIMIT 10'
@@ -171,6 +188,7 @@ try {
         'activity_sales_shop_id' => $shopId,
         'activity_purchases_shop_id' => $shopId,
         'activity_supplier_payments_shop_id' => $shopId,
+        'activity_customer_payments_shop_id' => $shopId,
     ]);
 
     respond(200, true, 'ড্যাশবোর্ডের সারাংশ পাওয়া গেছে।', [
@@ -185,6 +203,7 @@ try {
         'total_sales_returns' => (int) $summary['total_sales_returns'],
         'total_supplier_returns' => (int) $summary['total_supplier_returns'],
         'total_supplier_payments' => (int) $summary['total_supplier_payments'],
+        'total_customer_payments' => (int) $summary['total_customer_payments'],
         'total_stock_damages' => (int) $summary['total_stock_damages'],
         'total_transfers' => (int) $summary['total_transfers'],
         'total_users' => (int) $summary['total_users'],

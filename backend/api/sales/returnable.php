@@ -22,6 +22,13 @@ if (strlen($invoiceNumber) > 50) {
     respond(422, false, 'বিল নম্বর ৫০ অক্ষরের মধ্যে লিখুন।');
 }
 $invoiceNumber = $invoiceNumber === '' ? null : $invoiceNumber;
+$excludeSaleId = null;
+if (isset($_GET['exclude_sale_id']) && $_GET['exclude_sale_id'] !== '') {
+    $excludeSaleId = filter_var($_GET['exclude_sale_id'], FILTER_VALIDATE_INT);
+    if ($excludeSaleId === false || $excludeSaleId < 1) {
+        respond(422, false, 'সঠিক বাদ দেওয়ার বিক্রয় বিল নির্বাচন করুন।');
+    }
+}
 $walkInName = trim((string) ($_GET['customer_name'] ?? ''));
 if (strlen($walkInName) > 180) {
     respond(422, false, 'ওয়াক-ইন কাস্টমারের নাম ১৮০ অক্ষরের মধ্যে লিখুন।');
@@ -49,9 +56,11 @@ try {
     $saleSelection = $invoiceNumber === null
         ? "SELECT id FROM sales
            WHERE shop_id = :shop_id AND {$customerCondition}
+             AND (:exclude_check IS NULL OR id <> :excluded_sale_id)
            ORDER BY id DESC LIMIT 100"
         : "SELECT id FROM sales
            WHERE shop_id = :shop_id AND {$customerCondition}
+             AND (:exclude_check IS NULL OR id <> :excluded_sale_id)
              AND invoice_number = :invoice_number";
     $statement = $pdo->prepare(
         'SELECT si.id AS sale_item_id, s.id AS sale_id, s.invoice_number, s.sale_date,
@@ -75,6 +84,8 @@ try {
     $params = [
         'walk_in_name' => 'ওয়াক-ইন কাস্টমার',
         'shop_id' => $shopId,
+        'exclude_check' => $excludeSaleId,
+        'excluded_sale_id' => $excludeSaleId,
     ];
     if ($customerId !== null) {
         $params['customer_id'] = $customerId;

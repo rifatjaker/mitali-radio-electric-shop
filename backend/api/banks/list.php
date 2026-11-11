@@ -8,7 +8,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
 }
 
 $user = authenticatedUser();
-if (!userHasPermission($user, 'setup') && !userHasPermission($user, 'purchase')) {
+if (!userHasPermission($user, 'setup')
+    && !userHasPermission($user, 'purchase')
+    && !userHasPermission($user, 'sales')) {
     respond(403, false, 'ব্যাংক হিসাবের তালিকা দেখার অনুমতি আপনার অ্যাকাউন্টে নেই।');
 }
 $shopId = authorizedShopId($user);
@@ -21,6 +23,9 @@ try {
                 EXISTS (
                     SELECT 1 FROM supplier_payments sp
                     WHERE sp.bank_account_id = ba.id AND sp.shop_id = ba.shop_id
+                ) OR EXISTS (
+                    SELECT 1 FROM customer_payments cp
+                    WHERE cp.bank_account_id = ba.id AND cp.shop_id = ba.shop_id
                 ) AS has_transactions
          FROM bank_accounts ba WHERE ba.shop_id = :shop_id
          ORDER BY ba.bank_name, ba.account_name, ba.id'

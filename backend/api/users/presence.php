@@ -7,11 +7,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
     respond(405, false, 'ইউজার উপস্থিতি দেখতে GET অনুরোধ পাঠান।');
 }
 
-$user = requireOwner();
+$user = authenticatedUser();
+if ($user['role'] !== 'owner'
+    && ($user['role'] !== 'manager' || !userHasPermission($user, 'overview'))) {
+    respond(403, false, 'ইউজার উপস্থিতি দেখার অনুমতি আপনার অ্যাকাউন্টে নেই।');
+}
 $shopId = authorizedShopId($user);
 
 try {
     $pdo = database();
+    $userScope = $user['role'] === 'owner'
+        ? "(u.shop_id = :shop_id OR u.role = 'owner')"
+        : 'u.shop_id = :shop_id';
     $statement = $pdo->prepare(
         'SELECT u.id, u.username, u.display_name, u.role, u.is_active, u.last_login_at,
                 MAX(p.last_seen_at) AS last_seen_at,
@@ -22,7 +29,7 @@ try {
                 END AS is_online
          FROM users u
          LEFT JOIN user_presence_sessions p ON p.user_id = u.id
-         WHERE u.shop_id = :shop_id OR u.role = \'owner\'
+         WHERE ' . $userScope . '
          GROUP BY u.id, u.username, u.display_name, u.role, u.is_active, u.last_login_at
          ORDER BY is_online DESC, u.display_name ASC, u.username ASC'
     );

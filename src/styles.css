@@ -3325,9 +3325,92 @@ button {
   color: #236d46;
 }
 
-.sales-report-reprint {
-  color: #236d46;
+.customer-ledger-modal {
+  width: min(1120px, 100%);
+}
+
+.customer-ledger-print-heading {
+  display: none;
+}
+
+.customer-ledger-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.customer-ledger-table {
+  min-width: 760px;
+}
+
+.customer-ledger-table td:nth-child(n + 4),
+.customer-ledger-table tfoot td {
+  text-align: right;
   white-space: nowrap;
+}
+
+.customer-ledger-opening {
+  background: #f1f8f2;
+  font-weight: 700;
+}
+
+.sales-report-action-menu {
+  position: relative;
+  width: max-content;
+}
+
+.sales-report-action-menu summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #236d46;
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.sales-report-action-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.sales-report-action-options {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 4;
+  display: grid;
+  min-width: 128px;
+  padding: 5px;
+  border: 1px solid #dce7de;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 8px 20px #1e3b2b24;
+}
+
+.sales-report-action-options button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #34483a;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sales-report-action-options button:hover:not(:disabled) {
+  background: #f1f8f2;
+}
+
+.sales-report-action-options button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.sales-report-action-options .sales-report-delete-action {
+  color: #b42318;
 }
 
 .sales-report-limit {
@@ -3585,7 +3668,7 @@ button {
 
 .purchase-report-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 1080px;
   border-collapse: separate;
   border-spacing: 0;
   color: #334138;
@@ -3634,6 +3717,15 @@ button {
 
 .purchase-report-table tbody td:last-child {
   color: #236d46;
+}
+
+.purchase-report-table tbody td.no-print {
+  color: inherit;
+  text-align: center;
+}
+
+.purchase-report-table .sales-report-action-menu {
+  margin-left: auto;
 }
 
 .purchase-report-table tfoot th,
@@ -3705,6 +3797,11 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 10px 12px 0;
   }
+
+  .customer-ledger-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px 12px 0;
+  }
 }
 
 @media print {
@@ -3721,13 +3818,16 @@ button {
   .sales-report-modal,
   .sales-report-modal *,
   .purchase-report-modal,
-  .purchase-report-modal * {
+  .purchase-report-modal *,
+  .customer-ledger-modal,
+  .customer-ledger-modal * {
     visibility: visible !important;
   }
 
   .stock-report-modal,
   .sales-report-modal,
-  .purchase-report-modal {
+  .purchase-report-modal,
+  .customer-ledger-modal {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -3743,7 +3843,9 @@ button {
   .sales-report-modal .product-modal-header,
   .sales-report-filters,
   .purchase-report-modal .product-modal-header,
-  .purchase-report-filters {
+  .purchase-report-filters,
+  .customer-ledger-modal .product-modal-header,
+  .customer-ledger-modal .sales-report-filters {
     display: none !important;
   }
 
@@ -3761,6 +3863,19 @@ button {
 
   .purchase-report-summary {
     padding: 0 0 8px;
+  }
+
+  .customer-ledger-print-heading {
+    display: grid;
+  }
+
+  .customer-ledger-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 0 0 8px;
+  }
+
+  .customer-ledger-table {
+    min-width: 0;
   }
 
   .sales-report-summary {
@@ -4879,6 +4994,62 @@ button {
 
 .user-management-modal {
   width: min(1120px, 100%);
+}
+
+.delete-audit-modal {
+  width: min(1280px, 100%);
+}
+
+.delete-audit-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.delete-audit-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.delete-audit-pagination strong {
+  min-width: 46px;
+  color: #435b49;
+  font-size: 11px;
+  text-align: center;
+}
+
+.delete-audit-table-wrap {
+  max-height: min(60vh, 580px);
+}
+
+.delete-audit-table {
+  min-width: 920px;
+}
+
+.delete-audit-table td:nth-child(3) {
+  min-width: 190px;
+}
+
+.delete-audit-table td:nth-child(3) small {
+  display: block;
+  margin-top: 3px;
+  color: #87938a;
+  font-size: 10px;
+}
+
+.delete-audit-reason {
+  min-width: 220px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.delete-audit-open-button {
+  flex: 0 0 auto;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .customer-setup-modal {

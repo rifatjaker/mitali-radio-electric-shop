@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/setup/helpers.php';
+require_once dirname(__DIR__) . '/delete-audit.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     respond(405, false, 'সাপ্লায়ার মুছতে POST অনুরোধ পাঠান।');
@@ -18,12 +19,13 @@ $supplierId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
 if ($supplierId === false || $supplierId === null || $supplierId < 1) {
     respond(422, false, 'সঠিক সাপ্লায়ার নির্বাচন করুন।');
 }
+$reason = validatedDeletionReason($body);
 
 try {
     $pdo = database();
     $pdo->beginTransaction();
     $statement = $pdo->prepare(
-        'SELECT previous_balance FROM suppliers WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
+        'SELECT supplier_name, previous_balance FROM suppliers WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
     );
     $statement->execute(['id' => $supplierId, 'shop_id' => $shopId]);
     $supplier = $statement->fetch();
@@ -42,6 +44,7 @@ try {
         respond(409, false, 'ক্রয়/পেমেন্ট লেনদেন বা বকেয়া থাকা সাপ্লায়ার মুছবেন না।');
     }
 
+    recordDeletionAudit($pdo, $shopId, $user, 'supplier', (int) $supplierId, $supplier['supplier_name'], $reason);
     $delete = $pdo->prepare('DELETE FROM suppliers WHERE id = :id AND shop_id = :shop_id');
     $delete->execute(['id' => $supplierId, 'shop_id' => $shopId]);
     $pdo->commit();

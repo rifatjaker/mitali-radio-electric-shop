@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/setup/helpers.php';
+require_once dirname(__DIR__) . '/delete-audit.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     respond(405, false, 'কাস্টমার মুছতে POST অনুরোধ পাঠান।');
@@ -18,12 +19,13 @@ $customerId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
 if ($customerId === false || $customerId === null || $customerId < 1) {
     respond(422, false, 'সঠিক কাস্টমার নির্বাচন করুন।');
 }
+$reason = validatedDeletionReason($body);
 
 try {
     $pdo = database();
     $pdo->beginTransaction();
     $statement = $pdo->prepare(
-        'SELECT current_balance FROM customers WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
+        'SELECT customer_name, current_balance FROM customers WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
     );
     $statement->execute(['id' => $customerId, 'shop_id' => $shopId]);
     $customer = $statement->fetch();
@@ -33,7 +35,7 @@ try {
     }
     $hasTransactions = setupReferenceExists(
         $pdo,
-        ['sales', 'sale_bills', 'sales_bills', 'sale_items', 'sales_items'],
+        ['sales', 'sale_bills', 'sales_bills', 'sale_items', 'sales_items', 'customer_payments'],
         'customer_id',
         (int) $customerId,
     ) || setupForeignKeyReferenceExists($pdo, 'customers', (int) $customerId);
@@ -42,6 +44,7 @@ try {
         respond(409, false, 'বিক্রয় লেনদেন বা বকেয়া থাকা কাস্টমার মুছবেন না।');
     }
 
+    recordDeletionAudit($pdo, $shopId, $user, 'customer', (int) $customerId, $customer['customer_name'], $reason);
     $delete = $pdo->prepare('DELETE FROM customers WHERE id = :id AND shop_id = :shop_id');
     $delete->execute(['id' => $customerId, 'shop_id' => $shopId]);
     $pdo->commit();

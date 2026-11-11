@@ -25,7 +25,7 @@ try {
     $warehouseCount = (int) $pdo->query('SELECT COUNT(*) FROM warehouses')->fetchColumn();
     if ($warehouseCount >= MAX_WAREHOUSES) {
         $pdo->rollBack();
-        respond(409, false, 'সর্বোচ্চ ৩টি গুদাম খোলা যাবে। সীমা বাড়াতে ডেভেলপারের সাথে যোগাযোগ করুন।');
+        respond(409, false, 'সর্বোচ্চ ৬টি গুদাম খোলা যাবে। সীমা বাড়াতে ডেভেলপারের সাথে যোগাযোগ করুন।');
     }
 
     $statement = $pdo->prepare(

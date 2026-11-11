@@ -20,6 +20,8 @@ import {
   Lightbulb,
   LockKeyhole,
   LogOut,
+  MessageSquareText,
+  MoreHorizontal,
   Package,
   PackagePlus,
   Plus,
@@ -27,6 +29,7 @@ import {
   Receipt,
   RotateCcw,
   Save,
+  Search,
   Share2,
   Settings,
   ShieldCheck,
@@ -55,12 +58,13 @@ const numberFormatter = new Intl.NumberFormat("en-IN", {
 });
 
 function ShopPrintHeader({ shop, className = "" }) {
-  const shopName = shop?.shop_name || "মিতালী রেডিও ইলেকট্রিক";
-  const shopLabel = shop?.id
-    ? new RegExp(`\\(\\s*Shop-${shop.id}\\s*\\)\\s*$`, "i").test(shopName)
+  const memoHeading = shop?.memo_heading?.trim();
+  const shopName = memoHeading || shop?.shop_name || "মিতালী রেডিও ইলেকট্রিক";
+  const shopLabel = memoHeading || !shop?.id
+    ? shopName
+    : new RegExp(`\\(\\s*Shop-${shop.id}\\s*\\)\\s*$`, "i").test(shopName)
       ? shopName
-      : `${shopName} (Shop-${shop.id})`
-    : shopName;
+      : `${shopName} (Shop-${shop.id})`;
   return (
     <div className={`print-shop-heading ${className}`.trim()}>
       <strong>{shopLabel}</strong>
@@ -73,6 +77,18 @@ function ShopPrintHeader({ shop, className = "" }) {
 function formatMoney(value) {
   const amount = Number(value);
   return moneyFormatter.format(Number.isFinite(amount) ? amount : 0);
+}
+
+function promptDeletionReason(recordLabel, showToast) {
+  const input = window.prompt(`“${recordLabel}” মুছে ফেলার কারণ লিখুন (আবশ্যক):`);
+  if (input === null) return null;
+  const reason = input.trim();
+  const length = Array.from(reason).length;
+  if (length === 0 || length > 500) {
+    showToast("error", "মুছে ফেলার কারণ লিখুন (সর্বোচ্চ ৫০০ অক্ষর)।");
+    return null;
+  }
+  return reason;
 }
 
 function Toast({ toast, onDismiss }) {
@@ -349,7 +365,7 @@ const DASHBOARD_TABS = [
     modules: [
       { key: "sales-create", title: "নতুন বিক্রয়", detail: "কাস্টমার বিল তৈরি করুন", icon: ShoppingCart },
       { key: "sales-return", title: "কাস্টমার রিটার্ন", detail: "আগের বিলের পণ্য ফেরত ও বকেয়া সমন্বয়", icon: RotateCcw },
-      { title: "বাকি আদায়", detail: "কাস্টমার পেমেন্ট গ্রহণ", icon: Wallet },
+      { key: "customer-payment", title: "বাকি আদায়", detail: "কাস্টমারের কাছ থেকে নগদ বা ব্যাংকে পেমেন্ট গ্রহণ", icon: Wallet },
     ],
   },
   {
@@ -372,7 +388,7 @@ const DASHBOARD_TABS = [
       { key: "sales-report", title: "বিক্রয় রিপোর্ট", detail: "বিল খুঁজুন, হিসাব দেখুন ও মেমো পুনরায় প্রিন্ট করুন", icon: BarChart3 },
       { key: "purchase-report", title: "ক্রয় / চালান রিপোর্ট", detail: "তারিখ, সাপ্লায়ার ও চালান অনুযায়ী ক্রয় দেখুন", icon: Receipt },
       { title: "লাভ-ক্ষতি", detail: "ব্যবসার আয়-ব্যয়ের সারাংশ", icon: Activity },
-      { title: "কাস্টমার লেজার", detail: "গ্রাহকের বাকি ও লেনদেন", icon: ContactRound },
+      { key: "customer-ledger", title: "কাস্টমার লেজার", detail: "কাস্টমারের বাকি ও তারিখভিত্তিক লেনদেন দেখুন ও প্রিন্ট করুন", icon: ContactRound },
       { key: "stock-report", title: "স্টক রিপোর্ট", detail: "তারিখভিত্তিক মজুত, ক্রয়, বিক্রয় ও সমন্বয়", icon: FileText },
       { key: "warehouse-stock", title: "গুদাম স্টক রিপোর্ট", detail: "গুদামভিত্তিক মজুত দেখুন ও প্রিন্ট করুন", icon: Boxes },
     ],
@@ -384,6 +400,7 @@ const DASHBOARD_METRICS = [
   { key: "today_purchases", label: "আজকের ক্রয়", icon: Receipt, color: "blue", note: "দোকান ও গুদামের ক্রয়" },
   { key: "total_products", label: "মোট পণ্য", icon: Boxes, color: "amber", note: "পণ্য ক্যাটালগ" },
   { key: "warranty_claims", label: "ওয়ারেন্টি ক্লেইম", icon: Wrench, color: "rose", note: "ওয়ারেন্টি মডিউল চালু নয়" },
+  { key: "sms_balance", label: "SMS ব্যালেন্স", icon: MessageSquareText, color: "blue", note: "SMS gateway ব্যালেন্স" },
 ];
 
 const ELECTRICAL_UNITS = [
@@ -572,12 +589,14 @@ function ProductSetupForm({ token, shopId, onClose, onDataChanged, showToast, ca
 
   async function deleteProduct(product) {
     if (!window.confirm(`“${product.product_name}” পণ্যটি মুছে ফেলবেন?`)) return;
+    const reason = promptDeletionReason(`${product.product_name} পণ্য`, showToast);
+    if (!reason) return;
     try {
       const response = await apiRequest("/products/delete.php", {
         method: "POST",
         token,
         shopId,
-        body: JSON.stringify({ id: product.id }),
+        body: JSON.stringify({ id: product.id, reason }),
       });
       showToast("success", response.message);
       onDataChanged();
@@ -1048,12 +1067,14 @@ function CustomerSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
 
   async function deleteCustomer(customer) {
     if (!window.confirm(`“${customer.customer_name}” কাস্টমারটি মুছে ফেলবেন?`)) return;
+    const reason = promptDeletionReason(`${customer.customer_name} কাস্টমার`, showToast);
+    if (!reason) return;
     try {
       const response = await apiRequest("/customers/delete.php", {
         method: "POST",
         token,
         shopId,
-        body: JSON.stringify({ id: customer.id }),
+        body: JSON.stringify({ id: customer.id, reason }),
       });
       showToast("success", response.message);
       await loadCustomers();
@@ -1443,12 +1464,14 @@ function SupplierSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
 
   async function deleteSupplier(supplier) {
     if (!window.confirm(`“${supplier.supplier_name}” সাপ্লায়ারটি মুছে ফেলবেন?`)) return;
+    const reason = promptDeletionReason(`${supplier.supplier_name} সাপ্লায়ার`, showToast);
+    if (!reason) return;
     try {
       const response = await apiRequest("/suppliers/delete.php", {
         method: "POST",
         token,
         shopId,
-        body: JSON.stringify({ id: supplier.id }),
+        body: JSON.stringify({ id: supplier.id, reason }),
       });
       showToast("success", response.message);
       await loadSuppliers();
@@ -1843,12 +1866,14 @@ function BankSetupForm({ token, shopId, onClose, onDataChanged, showToast, canEd
       return;
     }
     if (!window.confirm(`“${account.bank_name} · ${account.account_name}” হিসাবটি মুছে ফেলবেন?`)) return;
+    const reason = promptDeletionReason(`${account.bank_name} · ${account.account_name} ব্যাংক হিসাব`, showToast);
+    if (!reason) return;
     try {
       const response = await apiRequest("/banks/delete.php", {
         method: "POST",
         token,
         shopId,
-        body: JSON.stringify({ id: account.id }),
+        body: JSON.stringify({ id: account.id, reason }),
       });
       showToast("success", response.message);
       await loadAccounts();
@@ -2038,26 +2063,32 @@ function BankSetupForm({ token, shopId, onClose, onDataChanged, showToast, canEd
   );
 }
 
-function PurchaseForm({ token, shopId, onClose, onSaved, showToast }) {
+function PurchaseForm({ token, shopId, onClose, onSaved, showToast, initialPurchase = null }) {
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [values, setValues] = useState({
-    supplier_id: "",
-    bill_number: "",
-    purchase_date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+  const [values, setValues] = useState(() => ({
+    supplier_id: initialPurchase ? String(initialPurchase.supplier_id) : "",
+    bill_number: initialPurchase?.bill_number || "",
+    purchase_date: initialPurchase?.purchase_date || new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 10),
-    destination_type: "shop",
-    warehouse_id: "",
-    notes: "",
-  });
-  const [items, setItems] = useState([
-    { rowId: 1, product_id: "", product_search: "", quantity: "1", unit_price: "" },
-  ]);
-  const [nextRowId, setNextRowId] = useState(2);
+    destination_type: initialPurchase?.destination_type || "shop",
+    warehouse_id: initialPurchase?.warehouse_id ? String(initialPurchase.warehouse_id) : "",
+    notes: initialPurchase?.notes || "",
+  }));
+  const [items, setItems] = useState(() => initialPurchase?.items?.length
+    ? initialPurchase.items.map((item, index) => ({
+      rowId: index + 1,
+      product_id: String(item.product_id),
+      product_search: "",
+      quantity: String(item.quantity),
+      unit_price: String(item.unit_price),
+    }))
+    : [{ rowId: 1, product_id: "", product_search: "", quantity: "1", unit_price: "" }]);
+  const [nextRowId, setNextRowId] = useState((initialPurchase?.items?.length || 1) + 1);
 
   useEffect(() => {
     let active = true;
@@ -2154,11 +2185,12 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast }) {
 
     setSaving(true);
     try {
-      const response = await apiRequest("/purchases/create.php", {
+      const response = await apiRequest(initialPurchase ? "/purchases/update.php" : "/purchases/create.php", {
         method: "POST",
         token,
         shopId,
         body: JSON.stringify({
+          ...(initialPurchase ? { purchase_id: initialPurchase.id } : {}),
           ...values,
           items: items.map(({ product_id, quantity, unit_price }) => ({
             product_id,
@@ -2187,7 +2219,7 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast }) {
         <header className="product-modal-header">
           <span className="product-modal-icon"><Receipt size={22} /></span>
           <div>
-            <h2 id="purchase-form-title">নতুন ক্রয় / চালান</h2>
+            <h2 id="purchase-form-title">{initialPurchase ? "ক্রয় / চালান সম্পাদনা" : "নতুন ক্রয় / চালান"}</h2>
             <p>সাপ্লায়ার ও পণ্যের গন্তব্য বেছে চালানের পণ্য কার্টে যোগ করুন।</p>
           </div>
           <button
@@ -2429,7 +2461,7 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast }) {
                 </button>
                 <button className="product-save-button" disabled={saving} type="submit">
                   {saving ? <span className="button-spinner" /> : <Save size={17} />}
-                  {saving ? "সংরক্ষণ হচ্ছে..." : "ক্রয় বিল সংরক্ষণ"}
+                  {saving ? "সংরক্ষণ হচ্ছে..." : initialPurchase ? "পরিবর্তন সংরক্ষণ" : "ক্রয় বিল সংরক্ষণ"}
                 </button>
               </div>
             </footer>
@@ -2480,13 +2512,13 @@ function SalesReceiptFooter() {
       </div>
       <div className="sales-receipt-thanks">
         <strong>ধন্যবাদ — আবার আসবেন</strong>
-        <span>এই মেমোটি কম্পিউটার দ্বারা তৈরি; স্বাক্ষর ছাড়াই গ্রহণযোগ্য।</span>
+        <span>এই মেমোটি কম্পিউটার দ্বারা তৈরি।</span>
       </div>
     </footer>
   );
 }
 
-function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
+function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, initialSale = null }) {
   const [customers, setCustomers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
@@ -2520,6 +2552,56 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
   const [walkInSuggestions, setWalkInSuggestions] = useState([]);
   const [selectedReturnInvoice, setSelectedReturnInvoice] = useState("");
   const [returnQuantities, setReturnQuantities] = useState({});
+
+  useEffect(() => {
+    if (!initialSale) return;
+    setSaleSource(initialSale.sale_source);
+    setWarehouseId(initialSale.warehouse_id ? String(initialSale.warehouse_id) : "");
+    setValues({
+      customer_id: initialSale.customer_id ? String(initialSale.customer_id) : "",
+      customer_search: initialSale.customer_id
+        ? customerOptionLabel(customers.find((customer) => customer.id === initialSale.customer_id) || {
+          customer_name: initialSale.customer_name,
+          id: initialSale.customer_id,
+        })
+        : "",
+      customer_name: initialSale.customer_id ? "" : initialSale.customer_name,
+      sale_date: initialSale.sale_date,
+      vat_amount: String(initialSale.vat_amount),
+      discount_amount: String(initialSale.discount_amount),
+      special_discount_amount: String(initialSale.special_discount_amount),
+      payment_method: initialSale.payment_method,
+      payment_received: String(initialSale.payment_received),
+      notes: initialSale.notes || "",
+    });
+    const saleItems = initialSale.items.map((item, index) => ({
+      rowId: index + 1,
+      product_id: String(item.product_id),
+      product_search: `${item.product_name}${item.product_code ? ` · ${item.product_code}` : ""}`,
+      quantity: String(item.quantity),
+      unit_price: String(item.unit_price),
+    }));
+    setItems(saleItems);
+    setNextRowId(saleItems.length + 1);
+  }, [initialSale, customers]);
+
+  useEffect(() => {
+    if (!initialSale) return;
+    setProducts((current) => {
+      const byId = new Map(current.map((product) => [product.id, product]));
+      initialSale.items.forEach((item) => {
+        if (!byId.has(item.product_id)) {
+          byId.set(item.product_id, {
+            id: item.product_id,
+            product_name: item.product_name,
+            unit: item.unit,
+            available_stock: Number(item.quantity),
+          });
+        }
+      });
+      return [...byId.values()];
+    });
+  }, [initialSale, products.length]);
 
   useEffect(() => {
     let active = true;
@@ -2595,7 +2677,8 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
   const selectedCustomer = customers.find(
     (customer) => customer.id === Number(values.customer_id),
   );
-  const previousDue = Number(selectedCustomer?.current_balance || 0);
+  const previousDue = Number(selectedCustomer?.current_balance || 0)
+    - (initialSale ? Number(initialSale.net_amount) - Number(initialSale.previous_due_amount) : 0);
 
   function customerOptionLabel(customer) {
     return `${customer.customer_name}${customer.mobile_number
@@ -2718,6 +2801,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
       const query = new URLSearchParams();
       if (values.customer_id) query.set("customer_id", values.customer_id);
       else if (values.customer_name.trim()) query.set("customer_name", values.customer_name.trim());
+      if (initialSale) query.set("exclude_sale_id", String(initialSale.id));
       const queryString = query.toString();
       const suffix = queryString ? `?${queryString}` : "";
       const response = await apiRequest(`/sales/returnable.php${suffix}`, {
@@ -2800,7 +2884,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
     const unavailableProduct = saleLines.find((item) => (
       quantityByProduct[item.product_id] > Number(item.product?.available_stock || 0) + 0.000001
     ));
-    if (unavailableProduct) {
+    if (unavailableProduct && !initialSale) {
       showToast("error", `${unavailableProduct.product?.product_name || "পণ্য"}-এর নির্বাচিত স্থানে পর্যাপ্ত স্টক নেই।`);
       return;
     }
@@ -2826,6 +2910,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
           payment_received: values.payment_received === "" && !selectedCustomer
             ? Math.max(0, invoiceAmount).toFixed(2)
             : values.payment_received,
+          sale_id: initialSale?.id,
           items: saleLines.map(({ product_id, quantity, unit_price }) => ({
             product_id,
             quantity,
@@ -2881,7 +2966,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
         <header className="product-modal-header no-print">
           <span className="product-modal-icon"><ShoppingCart size={22} /></span>
           <div>
-            <h2 id="sales-form-title">{receipt ? "বিক্রয় রসিদ" : "নতুন বিক্রয় / মেমো"}</h2>
+            <h2 id="sales-form-title">{receipt ? "বিক্রয় রসিদ" : initialSale ? "বিক্রয় মেমো সম্পাদনা" : "নতুন বিক্রয় / মেমো"}</h2>
             <p>{receipt ? receipt.invoice_number : "পণ্য বিক্রি, পুরোনো পণ্য ফেরত ও বিল সমন্বয় করুন।"}</p>
           </div>
           <button
@@ -2966,10 +3051,17 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
           </div>
         ) : (
           <form className="product-form sales-form" onSubmit={handleSubmit}>
+            {initialSale ? (
+              <p className="sales-fifo-note">
+                <strong>নিরাপদ সম্পাদনা</strong>
+                <span>কাস্টমার, তারিখ ও বিক্রয়ের স্থান অপরিবর্তিত থাকবে। Return বা পরবর্তী স্টক-লেনদেন থাকলে সার্ভার সম্পাদনা বন্ধ করবে।</span>
+              </p>
+            ) : null}
             <div className="sales-form-grid">
               <label className="product-form-field" htmlFor="sale-stock-source">
                 <span className="product-field-label">পণ্য বিক্রির স্থান</span>
                 <SearchableSelect
+                  disabled={Boolean(initialSale)}
                   id="sale-stock-source"
                   onChange={changeSaleSource}
                   options={[
@@ -2984,6 +3076,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
                 <label className="product-form-field" htmlFor="sale-warehouse">
                   <span className="product-field-label">গুদাম নির্বাচন করুন</span>
                   <SearchableSelect
+                    disabled={Boolean(initialSale)}
                     id="sale-warehouse"
                     onChange={(event) => {
                       setWarehouseId(event.target.value);
@@ -3010,6 +3103,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
                 <span className="product-field-label">কাস্টমার খুঁজুন (নাম/মোবাইল)</span>
                 <SearchableSelect
                   ariaLabel="কাস্টমার খুঁজুন (নাম/মোবাইল)"
+                  disabled={Boolean(initialSale)}
                   id="sale-customer"
                   name="customer_id"
                   onChange={updateField}
@@ -3037,6 +3131,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
                     name="customer_name"
                     onChange={updateField}
                     placeholder="আগের নাম লিখে নির্বাচন করুন, অথবা নতুন নাম দিন"
+                    readOnly={Boolean(initialSale)}
                     value={values.customer_name}
                   />
                   <datalist id="sale-walkin-name-options">
@@ -3046,7 +3141,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast }) {
               ) : null}
               <label className="product-form-field" htmlFor="sale-date">
                 <span className="product-field-label">বিক্রয়ের তারিখ</span>
-                <input className="product-field-control" id="sale-date" name="sale_date" onChange={updateField} required type="date" value={values.sale_date} />
+                <input className="product-field-control" disabled={Boolean(initialSale)} id="sale-date" name="sale_date" onChange={updateField} required type="date" value={values.sale_date} />
               </label>
             </div>
 
@@ -3577,10 +3672,13 @@ function ActivityReceiptMemo({ receipt, type, shop, onClose }) {
   }, []);
 
   const isPurchase = type === "purchase";
-  const title = isPurchase ? "ক্রয় চালান" : "সাপ্লায়ার পেমেন্ট রসিদ";
+  const isCustomerPayment = type === "customer_payment";
+  const title = isPurchase
+    ? "ক্রয় চালান"
+    : isCustomerPayment ? "কাস্টমার বাকি আদায় রসিদ" : "সাপ্লায়ার পেমেন্ট রসিদ";
   const reference = isPurchase
     ? (receipt.bill_number || `ক্রয় #${receipt.id}`)
-    : `সাপ্লায়ার পেমেন্ট #${receipt.id}`;
+    : isCustomerPayment ? `আদায় রসিদ #${receipt.id}` : `সাপ্লায়ার পেমেন্ট #${receipt.id}`;
   const receiptDate = isPurchase ? receipt.purchase_date : receipt.payment_date;
   const receiptTime = isPurchase ? receipt.purchase_time : receipt.payment_time;
   const formattedDate = receiptDate ? new Intl.DateTimeFormat("bn-BD", {
@@ -3606,9 +3704,9 @@ function ActivityReceiptMemo({ receipt, type, shop, onClose }) {
             <div className="sales-receipt-meta">
               <span><strong>{isPurchase ? "চালান নম্বর" : "রসিদ নম্বর"}</strong><b>{reference}</b></span>
               <span><strong>তারিখ ও সময়</strong><b>{formattedDate}{receiptTime ? ` · ${receiptTime}` : ""}</b></span>
-              <span><strong>সাপ্লায়ার</strong><b>{receipt.supplier_name}</b></span>
-              {receipt.supplier_mobile_number ? <span><strong>মোবাইল</strong><b>{receipt.supplier_mobile_number}</b></span> : null}
-              {receipt.supplier_address ? <span><strong>ঠিকানা</strong><b>{receipt.supplier_address}</b></span> : null}
+              <span><strong>{isCustomerPayment ? "কাস্টমার" : "সাপ্লায়ার"}</strong><b>{isCustomerPayment ? receipt.customer_name : receipt.supplier_name}</b></span>
+              {(receipt.customer_mobile_number || receipt.supplier_mobile_number) ? <span><strong>মোবাইল</strong><b>{receipt.customer_mobile_number || receipt.supplier_mobile_number}</b></span> : null}
+              {(receipt.customer_address || receipt.supplier_address) ? <span><strong>ঠিকানা</strong><b>{receipt.customer_address || receipt.supplier_address}</b></span> : null}
               <span><strong>অপারেটর</strong><b>{receipt.operator_name || "—"}</b></span>
             </div>
           </div>
@@ -3633,11 +3731,11 @@ function ActivityReceiptMemo({ receipt, type, shop, onClose }) {
             </>
           ) : (
             <dl className="sales-receipt-summary">
-              <div><dt>পেমেন্ট পদ্ধতি</dt><dd>{receipt.payment_method === "bank" ? "By Bank · ব্যাংক" : "By Cash · নগদ"}</dd></div>
+              <div><dt>{isCustomerPayment ? "আদায়ের মাধ্যম" : "পেমেন্ট পদ্ধতি"}</dt><dd>{receipt.payment_method === "bank" ? "By Bank · ব্যাংক" : "By Cash · নগদ"}</dd></div>
               {receipt.payment_method === "bank" ? (
                 <div><dt>ব্যাংক হিসাব</dt><dd>{[receipt.bank_name, receipt.account_name, receipt.account_number, receipt.branch_name].filter(Boolean).join(" · ") || "—"}</dd></div>
               ) : null}
-              <div className="sales-receipt-net"><dt>পরিশোধিত অর্থ</dt><dd>৳ {formatMoney(receipt.payment_amount)}</dd></div>
+              <div className="sales-receipt-net"><dt>{isCustomerPayment ? "আদায়কৃত অর্থ" : "পরিশোধিত অর্থ"}</dt><dd>৳ {formatMoney(receipt.payment_amount)}</dd></div>
             </dl>
           )}
           {receipt.notes || receipt.note ? <p className="sales-receipt-note"><strong>নোট:</strong> {receipt.notes || receipt.note}</p> : null}
@@ -4070,6 +4168,238 @@ function SupplierPaymentForm({ token, shopId, shop, onClose, onDataChanged, show
               <p className="user-management-note">
                 পেমেন্ট সংরক্ষিত হয়েছে। মেমো লোড না হলে{" "}
                 <button className="user-action-button" onClick={() => openSavedPaymentMemo(savedPaymentId)} type="button">মেমো আবার খুলুন</button>।
+              </p>
+            ) : null}
+          </form>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function CustomerPaymentForm({ token, shopId, shop, onClose, onDataChanged, showToast }) {
+  const [customers, setCustomers] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [customerId, setCustomerId] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [note, setNote] = useState("");
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [loadingBanks, setLoadingBanks] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedPaymentId, setSavedPaymentId] = useState(null);
+  const [paymentReceipt, setPaymentReceipt] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest("/customers/payment-options.php", { token, shopId })
+      .then((response) => {
+        if (active) setCustomers(response.data.customers);
+      })
+      .catch((error) => {
+        if (active) showToast("error", error.message);
+      })
+      .finally(() => {
+        if (active) setLoadingCustomers(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, shopId, showToast]);
+
+  useEffect(() => {
+    if (paymentMethod !== "bank") {
+      setBankAccountId("");
+      return undefined;
+    }
+    let active = true;
+    setLoadingBanks(true);
+    apiRequest("/banks/list.php", { token, shopId })
+      .then((response) => {
+        if (active) setBankAccounts(response.data.accounts);
+      })
+      .catch((error) => {
+        if (active) showToast("error", error.message);
+      })
+      .finally(() => {
+        if (active) setLoadingBanks(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [paymentMethod, token, shopId, showToast]);
+
+  const selectedCustomer = customers.find((customer) => String(customer.id) === String(customerId));
+  const previousDue = Number(selectedCustomer?.current_due || 0);
+  const numericPayment = Number(paymentAmount);
+  const currentDue = previousDue - (Number.isFinite(numericPayment) ? numericPayment : 0);
+
+  async function openPaymentMemo(paymentId) {
+    try {
+      const response = await apiRequest(
+        `/customer-payments/receipt.php?id=${encodeURIComponent(paymentId)}`,
+        { token, shopId },
+      );
+      setPaymentReceipt(response.data.payment);
+    } catch (error) {
+      showToast("error", `আদায় সংরক্ষিত হয়েছে, কিন্তু রসিদ লোড করা যায়নি: ${error.message}`);
+    }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!selectedCustomer) {
+      showToast("error", "বকেয়া থাকা কাস্টমার নির্বাচন করুন।");
+      return;
+    }
+    if (!Number.isFinite(numericPayment) || numericPayment <= 0 || numericPayment > previousDue) {
+      showToast("error", "আদায়ের পরিমাণ শূন্যের বেশি এবং বর্তমান বকেয়ার মধ্যে লিখুন।");
+      return;
+    }
+    if (paymentMethod === "bank" && !bankAccountId) {
+      showToast("error", "ব্যাংক হিসাব নির্বাচন করুন।");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await apiRequest("/customer-payments/create.php", {
+        method: "POST",
+        token,
+        shopId,
+        body: JSON.stringify({
+          customer_id: customerId,
+          payment_amount: paymentAmount,
+          payment_method: paymentMethod,
+          bank_account_id: paymentMethod === "bank" ? bankAccountId : null,
+          note,
+        }),
+      });
+      setSavedPaymentId(response.data.payment.id);
+      showToast("success", `${response.message} বর্তমান বকেয়া: ৳ ${formatMoney(response.data.payment.current_due)}।`);
+      onDataChanged();
+      await openPaymentMemo(response.data.payment.id);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (paymentReceipt) {
+    return (
+      <ActivityReceiptMemo
+        onClose={onClose}
+        receipt={paymentReceipt}
+        shop={shop}
+        type="customer_payment"
+      />
+    );
+  }
+
+  return (
+    <div className="product-modal-backdrop">
+      <section aria-labelledby="customer-payment-title" aria-modal="true" className="product-modal stock-entry-modal" role="dialog">
+        <header className="product-modal-header">
+          <span className="product-modal-icon"><Wallet size={22} /></span>
+          <div><h2 id="customer-payment-title">বাকি আদায়</h2><p>কাস্টমারের বকেয়া নগদ বা ব্যাংকে গ্রহণ করুন।</p></div>
+          <button aria-label="বাকি আদায় ফর্ম বন্ধ করুন" className="product-modal-close" disabled={saving} onClick={onClose} type="button"><X size={20} /></button>
+        </header>
+        {loadingCustomers ? (
+          <div className="user-list-empty"><span className="button-spinner" /> বকেয়াসহ কাস্টমারের তালিকা লোড হচ্ছে...</div>
+        ) : customers.length === 0 ? (
+          <div className="user-list-empty">কোনো কাস্টমারের বকেয়া নেই।</div>
+        ) : (
+          <form className="product-form" onSubmit={handleSubmit}>
+            <div className="sales-form-grid">
+              <label className="product-form-field" htmlFor="customer-payment-customer">
+                <span className="product-field-label">কাস্টমার</span>
+                <SearchableSelect
+                  id="customer-payment-customer"
+                  onChange={(event) => {
+                    setCustomerId(event.target.value);
+                    setPaymentAmount("");
+                  }}
+                  options={[
+                    { value: "", label: "কাস্টমার নির্বাচন করুন" },
+                    ...customers.map((customer) => ({
+                      value: customer.id,
+                      label: `${customer.customer_name}${customer.mobile_number ? ` · ${customer.mobile_number}` : ""}${customer.address ? ` · ${customer.address}` : ""}`,
+                    })),
+                  ]}
+                  placeholder="নাম, মোবাইল বা ঠিকানা দিয়ে খুঁজুন"
+                  required
+                  value={customerId}
+                />
+              </label>
+              <div className="product-form-field">
+                <span className="product-field-label">পূর্বের বকেয়া</span>
+                <div aria-label={`পূর্বের বকেয়া ৳ ${formatMoney(previousDue)}`} aria-readonly="true" className="product-field-control sales-summary-readonly" role="textbox">৳ {formatMoney(previousDue)}</div>
+              </div>
+              <label className="product-form-field" htmlFor="customer-payment-amount">
+                <span className="product-field-label">আদায় (৳)</span>
+                <input className="product-field-control" id="customer-payment-amount" max={previousDue > 0 ? previousDue : undefined} min="0.01" onChange={(event) => setPaymentAmount(event.target.value)} required step="0.01" type="number" value={paymentAmount} />
+              </label>
+              <div className="product-form-field">
+                <span className="product-field-label">বর্তমান বকেয়া</span>
+                <div aria-label={`বর্তমান বকেয়া ৳ ${formatMoney(currentDue)}`} aria-readonly="true" className="product-field-control sales-summary-readonly" role="textbox">৳ {formatMoney(currentDue)}</div>
+              </div>
+              <label className="product-form-field" htmlFor="customer-payment-method">
+                <span className="product-field-label">আদায়ের মাধ্যম</span>
+                <SearchableSelect
+                  id="customer-payment-method"
+                  onChange={(event) => setPaymentMethod(event.target.value)}
+                  options={[
+                    { value: "cash", label: "By Cash · নগদ" },
+                    { value: "bank", label: "By Bank · ব্যাংক" },
+                  ]}
+                  placeholder="আদায়ের মাধ্যম নির্বাচন করুন"
+                  value={paymentMethod}
+                />
+              </label>
+              {paymentMethod === "bank" ? (
+                <label className="product-form-field" htmlFor="customer-payment-bank">
+                  <span className="product-field-label">ব্যাংক হিসাব</span>
+                  {loadingBanks ? (
+                    <span className="product-field-control">ব্যাংক হিসাব লোড হচ্ছে...</span>
+                  ) : (
+                    <SearchableSelect
+                      id="customer-payment-bank"
+                      onChange={(event) => setBankAccountId(event.target.value)}
+                      options={[
+                        { value: "", label: "ব্যাংক হিসাব নির্বাচন করুন" },
+                        ...bankAccounts.map((account) => ({
+                          value: account.id,
+                          label: `${account.bank_name} · ${account.account_name}${account.account_number ? ` · ${account.account_number}` : ""}`,
+                        })),
+                      ]}
+                      placeholder="ব্যাংক বা হিসাবের নাম লিখে খুঁজুন"
+                      required
+                      value={bankAccountId}
+                    />
+                  )}
+                  {!loadingBanks && bankAccounts.length === 0 ? <small>ব্যাংক পেমেন্টের আগে ব্যাংক সেটআপ করুন।</small> : null}
+                </label>
+              ) : null}
+            </div>
+            <label className="product-form-field stock-entry-notes" htmlFor="customer-payment-note">
+              <span className="product-field-label">নোট <span className="optional-label">ঐচ্ছিক</span></span>
+              <textarea className="product-field-control customer-address-control" id="customer-payment-note" maxLength={500} onChange={(event) => setNote(event.target.value)} rows={2} value={note} />
+            </label>
+            <footer className="product-form-actions purchase-form-actions">
+              <strong>আদায়: ৳ {formatMoney(numericPayment || 0)}</strong>
+              <div>
+                <button className="product-cancel-button" disabled={saving} onClick={onClose} type="button">বাতিল</button>
+                <button className="product-save-button" disabled={saving || savedPaymentId !== null || !selectedCustomer || previousDue <= 0 || (paymentMethod === "bank" && (loadingBanks || bankAccounts.length === 0))} type="submit">
+                  {saving ? <span className="button-spinner" /> : <Save size={17} />}
+                  {saving ? "সংরক্ষণ হচ্ছে..." : savedPaymentId !== null ? "আদায় সংরক্ষিত" : "আদায় সংরক্ষণ"}
+                </button>
+              </div>
+            </footer>
+            {savedPaymentId !== null ? (
+              <p className="user-management-note">
+                আদায় সংরক্ষিত হয়েছে। রসিদ লোড না হলে{" "}
+                <button className="user-action-button" onClick={() => openPaymentMemo(savedPaymentId)} type="button">রসিদ আবার খুলুন</button>।
               </p>
             ) : null}
           </form>
@@ -4783,7 +5113,128 @@ function StockReportPanel({ token, shopId, shop, onClose, showToast }) {
   );
 }
 
-function SalesReportPanel({ token, shopId, shop, onClose, showToast }) {
+function CustomerLedgerPanel({ token, shopId, shop, onClose, showToast }) {
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const [filters, setFilters] = useState({
+    customer_id: "",
+    date_from: `${today.slice(0, 7)}-01`,
+    date_to: today,
+  });
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  async function loadReport(event) {
+    if (event) event.preventDefault();
+    setLoading(true);
+    try {
+      const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== ""));
+      const response = await apiRequest(`/customers/ledger-report.php?${query.toString()}`, { token, shopId });
+      setReport(response.data);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadReport();
+  }, [token, shopId]);
+
+  const formatLedgerDate = (value) => new Intl.DateTimeFormat("bn-BD", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+    numberingSystem: "latn",
+  }).format(new Date(`${value}T00:00:00Z`));
+
+  return (
+    <div className="product-modal-backdrop stock-report-backdrop">
+      <section aria-labelledby="customer-ledger-title" aria-modal="true" className="product-modal stock-report-modal customer-ledger-modal" role="dialog">
+        <header className="product-modal-header no-print">
+          <span className="product-modal-icon"><ContactRound size={22} /></span>
+          <div><h2 id="customer-ledger-title">কাস্টমার লেজার</h2><p>কাস্টমারের বিক্রয়, ফেরত, আদায় ও চলতি বকেয়া দেখুন।</p></div>
+          <button aria-label="কাস্টমার লেজার বন্ধ করুন" className="product-modal-close" onClick={onClose} type="button"><X size={20} /></button>
+        </header>
+        <form className="sales-report-filters no-print" onSubmit={loadReport}>
+          <label>
+            <span>কাস্টমার</span>
+            <SearchableSelect
+              onChange={(event) => setFilters((current) => ({ ...current, customer_id: event.target.value }))}
+              options={[
+                { value: "", label: "কাস্টমার নির্বাচন করুন" },
+                ...(report?.customers || []).map((customer) => ({
+                  value: customer.id,
+                  label: `${customer.customer_name}${customer.mobile_number ? ` · ${customer.mobile_number}` : ""}${customer.address ? ` · ${customer.address}` : ""}`,
+                })),
+              ]}
+              placeholder="নাম, মোবাইল বা ঠিকানা দিয়ে খুঁজুন"
+              value={filters.customer_id}
+            />
+          </label>
+          <label><span>তারিখ থেকে</span><input className="product-field-control" max={today} onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))} required type="date" value={filters.date_from} /></label>
+          <label><span>তারিখ পর্যন্ত</span><input className="product-field-control" max={today} onChange={(event) => setFilters((current) => ({ ...current, date_to: event.target.value }))} required type="date" value={filters.date_to} /></label>
+          <button className="product-save-button" disabled={loading} type="submit">{loading ? <span className="button-spinner" /> : <BarChart3 size={16} />} লেজার দেখুন</button>
+          <button className="user-action-button" disabled={!report?.customer} onClick={() => window.print()} type="button"><Printer size={16} /> প্রিন্ট</button>
+        </form>
+        <div className="stock-report-print-heading customer-ledger-print-heading">
+          <ShopPrintHeader shop={shop} />
+          <span>
+            কাস্টমার লেজার
+            {report?.customer ? ` · ${report.customer.customer_name}` : ""}
+            {" · "}{report?.date_from ? formatLedgerDate(report.date_from) : filters.date_from}
+            {" থেকে "}{report?.date_to ? formatLedgerDate(report.date_to) : filters.date_to}
+          </span>
+          {report?.customer?.mobile_number ? <small>মোবাইল: {report.customer.mobile_number}</small> : null}
+        </div>
+        {report?.customer ? (
+          <div className="sales-report-summary customer-ledger-summary">
+            <div><span>শুরুর বকেয়া</span><strong>৳ {formatMoney(report.opening_balance)}</strong></div>
+            <div><span>মোট ডেবিট</span><strong>৳ {formatMoney(report.summary.debit)}</strong></div>
+            <div><span>মোট ক্রেডিট</span><strong>৳ {formatMoney(report.summary.credit)}</strong></div>
+            <div><span>শেষ বকেয়া</span><strong>৳ {formatMoney(report.closing_balance)}</strong></div>
+          </div>
+        ) : null}
+        <div className="sales-report-table-wrap customer-ledger-table-wrap">
+          {loading && !report ? (
+            <div className="user-list-empty"><span className="button-spinner" /> কাস্টমার লেজার তৈরি হচ্ছে...</div>
+          ) : !report?.customer ? (
+            <div className="user-list-empty">লেজার দেখতে কাস্টমার নির্বাচন করুন।</div>
+          ) : report.customer ? (
+            <>
+              <table className="sales-report-table customer-ledger-table">
+                <thead><tr><th>তারিখ</th><th>বিবরণ</th><th>রেফারেন্স</th><th>ডেবিট</th><th>ক্রেডিট</th><th>বকেয়া</th></tr></thead>
+                <tbody>
+                  <tr className="customer-ledger-opening">
+                    <td>{formatLedgerDate(report.date_from)}</td>
+                    <td>প্রারম্ভিক বকেয়া</td><td>—</td>
+                    <td>—</td><td>—</td><td>৳ {formatMoney(report.opening_balance)}</td>
+                  </tr>
+                  {report.rows.map((row, index) => (
+                    <tr key={`${row.event_type}-${row.reference}-${index}`}>
+                      <td>{formatLedgerDate(row.transaction_date)}</td>
+                      <td>{row.description}</td>
+                      <td>{row.reference}</td>
+                      <td>{row.debit > 0 ? `৳ ${formatMoney(row.debit)}` : "—"}</td>
+                      <td>{row.credit > 0 ? `৳ ${formatMoney(row.credit)}` : "—"}</td>
+                      <td><strong>৳ {formatMoney(row.balance)}</strong></td>
+                    </tr>
+                  ))}
+                  {report.rows.length === 0 ? <tr><td colSpan="6">নির্বাচিত সময়ে কোনো লেনদেন নেই।</td></tr> : null}
+                </tbody>
+                <tfoot><tr><th colSpan="3">মোট · {numberFormatter.format(report.summary.transaction_count)}টি লেনদেন</th><td>৳ {formatMoney(report.summary.debit)}</td><td>৳ {formatMoney(report.summary.credit)}</td><td>৳ {formatMoney(report.closing_balance)}</td></tr></tfoot>
+              </table>
+              {report.truncated ? <p className="sales-report-limit">প্রদর্শিত সীমা {numberFormatter.format(report.limit)}টি লেনদেন। ছোট সময়সীমা নির্বাচন করে আবার দেখুন।</p> : null}
+            </>
+          ) : <div className="user-list-empty">লেজার দেখতে কাস্টমার নির্বাচন করুন।</div>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SalesReportPanel({ token, shopId, shop, onClose, onChanged, showToast, canEdit, canDelete }) {
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const [filters, setFilters] = useState({
     date_from: `${today.slice(0, 7)}-01`,
@@ -4795,6 +5246,8 @@ function SalesReportPanel({ token, shopId, shop, onClose, showToast }) {
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingReceiptId, setLoadingReceiptId] = useState(null);
+  const [editingSale, setEditingSale] = useState(null);
+  const [deletingSaleId, setDeletingSaleId] = useState(null);
 
   async function loadReport(event) {
     if (event) event.preventDefault();
@@ -4823,6 +5276,40 @@ function SalesReportPanel({ token, shopId, shop, onClose, showToast }) {
       showToast("error", error.message);
     } finally {
       setLoadingReceiptId(null);
+    }
+  }
+
+  async function openEdit(bill) {
+    setLoadingReceiptId(bill.id);
+    try {
+      const response = await apiRequest(`/sales/receipt.php?id=${encodeURIComponent(bill.id)}`, { token, shopId });
+      setEditingSale(response.data.sale);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setLoadingReceiptId(null);
+    }
+  }
+
+  async function deleteSale(bill) {
+    if (!window.confirm(`“${bill.invoice_number}” বিক্রয় মেমোটি মুছে ফেলবেন?`)) return;
+    const reason = promptDeletionReason(`${bill.invoice_number} বিক্রয় মেমো`, showToast);
+    if (!reason) return;
+    setDeletingSaleId(bill.id);
+    try {
+      const response = await apiRequest("/sales/delete.php", {
+        method: "POST",
+        token,
+        shopId,
+        body: JSON.stringify({ sale_id: bill.id, reason }),
+      });
+      showToast("success", response.message);
+      onChanged();
+      await loadReport();
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setDeletingSaleId(null);
     }
   }
 
@@ -4866,7 +5353,7 @@ function SalesReportPanel({ token, shopId, shop, onClose, showToast }) {
           {loading && !report ? <div className="user-list-empty"><span className="button-spinner" /> বিক্রয় রিপোর্ট তৈরি হচ্ছে...</div> : report?.bills.length ? (
             <>
               <table className="sales-report-table">
-                <thead><tr><th>তারিখ</th><th>বিল নম্বর</th><th>কাস্টমার</th><th>স্থান</th><th>পণ্য</th><th>বিক্রয় মূল্য</th><th>আদায়</th><th>বর্তমান বকেয়া</th><th className="no-print">মেমো</th></tr></thead>
+                <thead><tr><th>তারিখ</th><th>বিল নম্বর</th><th>কাস্টমার</th><th>স্থান</th><th>পণ্য</th><th>বিক্রয় মূল্য</th><th>আদায়</th><th>বর্তমান বকেয়া</th><th className="no-print">অ্যাকশন</th></tr></thead>
                 <tbody>{report.bills.map((bill) => (
                   <tr key={bill.id}>
                     <td>{formatReportDate(bill.sale_date)}</td>
@@ -4877,7 +5364,19 @@ function SalesReportPanel({ token, shopId, shop, onClose, showToast }) {
                     <td>৳ {formatMoney(bill.subtotal)}</td>
                     <td>৳ {formatMoney(bill.payment_received)}</td>
                     <td>৳ {formatMoney(bill.present_due)}</td>
-                    <td className="no-print"><button className="user-action-button sales-report-reprint" disabled={loadingReceiptId !== null} onClick={() => openReceipt(bill)} type="button">{loadingReceiptId === bill.id ? <span className="button-spinner" /> : <Printer size={15} />} মেমো</button></td>
+                    <td className="no-print">
+                      <details className="sales-report-action-menu">
+                        <summary className="user-action-button" aria-label={`${bill.invoice_number} মেমো অ্যাকশন`}>
+                          {loadingReceiptId === bill.id || deletingSaleId === bill.id ? <span className="button-spinner" /> : <MoreHorizontal size={16} />}
+                          অ্যাকশন
+                        </summary>
+                        <div className="sales-report-action-options">
+                          <button disabled={loadingReceiptId !== null} onClick={() => openReceipt(bill)} type="button"><Printer size={14} /> মেমো</button>
+                          {canEdit ? <button disabled={loadingReceiptId !== null || deletingSaleId !== null} onClick={() => openEdit(bill)} type="button"><Pencil size={14} /> এডিট</button> : null}
+                          {canDelete ? <button className="sales-report-delete-action" disabled={loadingReceiptId !== null || deletingSaleId !== null} onClick={() => deleteSale(bill)} type="button"><Trash2 size={14} /> ডিলিট</button> : null}
+                        </div>
+                      </details>
+                    </td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -4887,11 +5386,25 @@ function SalesReportPanel({ token, shopId, shop, onClose, showToast }) {
         </div>
       </section>
       {receipt ? <SalesReceiptMemo receipt={receipt} shop={shop} onClose={() => setReceipt(null)} showToast={showToast} /> : null}
+      {editingSale ? (
+        <SalesForm
+          initialSale={editingSale}
+          onClose={() => setEditingSale(null)}
+          onSaved={() => {
+            onChanged();
+            loadReport();
+          }}
+          shop={shop}
+          shopId={shopId}
+          showToast={showToast}
+          token={token}
+        />
+      ) : null}
     </div>
   );
 }
 
-function PurchaseReportPanel({ token, shopId, shop, onClose, showToast }) {
+function PurchaseReportPanel({ token, shopId, shop, onClose, onChanged, showToast, canEdit, canDelete }) {
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const [filters, setFilters] = useState({
     date_from: today,
@@ -4902,6 +5415,10 @@ function PurchaseReportPanel({ token, shopId, shop, onClose, showToast }) {
   });
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [purchaseReceipt, setPurchaseReceipt] = useState(null);
+  const [editingPurchase, setEditingPurchase] = useState(null);
+  const [loadingPurchaseMemoId, setLoadingPurchaseMemoId] = useState(null);
+  const [deletingPurchaseId, setDeletingPurchaseId] = useState(null);
 
   async function loadReport(event) {
     if (event) event.preventDefault();
@@ -4917,6 +5434,41 @@ function PurchaseReportPanel({ token, shopId, shop, onClose, showToast }) {
     }
   }
 
+  async function openPurchaseMemo(bill) {
+    setLoadingPurchaseMemoId(bill.id);
+    try {
+      const response = await apiRequest(`/purchases/receipt.php?id=${encodeURIComponent(bill.id)}`, { token, shopId });
+      setPurchaseReceipt(response.data.purchase);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setLoadingPurchaseMemoId(null);
+    }
+  }
+
+  async function deletePurchase(bill) {
+    const billLabel = bill.bill_number || `ক্রয় #${bill.id}`;
+    if (!window.confirm(`“${billLabel}” ক্রয় চালানটি মুছে ফেলবেন?`)) return;
+    const reason = promptDeletionReason(`${billLabel} ক্রয় চালান`, showToast);
+    if (!reason) return;
+    setDeletingPurchaseId(bill.id);
+    try {
+      const response = await apiRequest("/purchases/delete.php", {
+        method: "POST",
+        token,
+        shopId,
+        body: JSON.stringify({ purchase_id: bill.id, reason }),
+      });
+      showToast("success", response.message);
+      onChanged();
+      await loadReport();
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setDeletingPurchaseId(null);
+    }
+  }
+
   useEffect(() => {
     loadReport();
   }, [token, shopId]);
@@ -4927,6 +5479,7 @@ function PurchaseReportPanel({ token, shopId, shop, onClose, showToast }) {
   }).format(Number(value) || 0);
 
   return (
+    <>
     <div className="product-modal-backdrop stock-report-backdrop">
       <section aria-labelledby="purchase-report-title" aria-modal="true" className="product-modal stock-report-modal purchase-report-modal" role="dialog">
         <header className="product-modal-header no-print">
@@ -4958,7 +5511,7 @@ function PurchaseReportPanel({ token, shopId, shop, onClose, showToast }) {
         <div className="stock-report-table-wrap">
           {loading && !report ? <div className="user-list-empty"><span className="button-spinner" /> ক্রয় রিপোর্ট তৈরি হচ্ছে...</div> : report?.bills.length ? (
             <table className="purchase-report-table">
-              <thead><tr><th>চালান / তারিখ</th><th>সাপ্লায়ার</th><th>গন্তব্য</th><th>পণ্য</th><th>মোট ক্রয়</th><th>রিটার্ন</th><th>নিট ক্রয়</th></tr></thead>
+              <thead><tr><th>চালান / তারিখ</th><th>সাপ্লায়ার</th><th>গন্তব্য</th><th>পণ্য</th><th>মোট ক্রয়</th><th>রিটার্ন</th><th>নিট ক্রয়</th><th className="no-print">অ্যাকশন</th></tr></thead>
               <tbody>{report.bills.map((bill) => (
                 <tr key={bill.id}>
                   <td><strong>{bill.bill_number || `ক্রয় #${bill.id}`}</strong><small>{bill.purchase_date}</small></td>
@@ -4981,14 +5534,43 @@ function PurchaseReportPanel({ token, shopId, shop, onClose, showToast }) {
                   <td>৳ {formatMoney(bill.total_amount)}</td>
                   <td>৳ {formatMoney(bill.returned_amount)}</td>
                   <td><strong>৳ {formatMoney(bill.net_amount)}</strong></td>
+                  <td className="no-print">
+                    <details className="sales-report-action-menu">
+                      <summary className="user-action-button" aria-label={`${bill.bill_number || `ক্রয় #${bill.id}`} চালান অ্যাকশন`}>
+                        {loadingPurchaseMemoId === bill.id || deletingPurchaseId === bill.id ? <span className="button-spinner" /> : <MoreHorizontal size={16} />}
+                        অ্যাকশন
+                      </summary>
+                      <div className="sales-report-action-options">
+                        <button disabled={loadingPurchaseMemoId !== null || deletingPurchaseId !== null} onClick={() => openPurchaseMemo(bill)} type="button"><Printer size={14} /> মেমো</button>
+                        {canEdit ? <button disabled={loadingPurchaseMemoId !== null || deletingPurchaseId !== null} onClick={() => setEditingPurchase(bill)} type="button"><Pencil size={14} /> এডিট</button> : null}
+                        {canDelete ? <button className="sales-report-delete-action" disabled={loadingPurchaseMemoId !== null || deletingPurchaseId !== null} onClick={() => deletePurchase(bill)} type="button"><Trash2 size={14} /> ডিলিট</button> : null}
+                      </div>
+                    </details>
+                  </td>
                 </tr>
               ))}</tbody>
-              <tfoot><tr><th colSpan="4">মোট · {numberFormatter.format(report.summary.bill_count)}টি চালান</th><td>৳ {formatMoney(report.summary.total_purchase)}</td><td>৳ {formatMoney(report.summary.total_returned)}</td><td>৳ {formatMoney(report.summary.net_purchase)}</td></tr></tfoot>
+              <tfoot><tr><th colSpan="4">মোট · {numberFormatter.format(report.summary.bill_count)}টি চালান</th><td>৳ {formatMoney(report.summary.total_purchase)}</td><td>৳ {formatMoney(report.summary.total_returned)}</td><td>৳ {formatMoney(report.summary.net_purchase)}</td><td className="no-print" /></tr></tfoot>
             </table>
           ) : report ? <div className="user-list-empty">এই ফিল্টারে কোনো ক্রয় চালান পাওয়া যায়নি।</div> : null}
         </div>
       </section>
     </div>
+    {purchaseReceipt ? <ActivityReceiptMemo receipt={purchaseReceipt} type="purchase" shop={shop} onClose={() => setPurchaseReceipt(null)} /> : null}
+    {editingPurchase ? (
+      <PurchaseForm
+        initialPurchase={editingPurchase}
+        onClose={() => setEditingPurchase(null)}
+        onSaved={() => {
+          setEditingPurchase(null);
+          onChanged();
+          loadReport();
+        }}
+        showToast={showToast}
+        shopId={shopId}
+        token={token}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -5099,11 +5681,13 @@ function UserManagementPanel({ token, shops, selectedShopId, onClose, onDataChan
     if (!window.confirm(`“${user.display_name}” অ্যাকাউন্টটি নিষ্ক্রিয় করবেন? আগের হিসাব মুছে যাবে না।`)) {
       return;
     }
+    const reason = promptDeletionReason(`${user.display_name} ইউজার`, showToast);
+    if (!reason) return;
     try {
       const response = await apiRequest("/users/delete.php", {
         method: "POST",
         token,
-        body: JSON.stringify({ id: user.id }),
+        body: JSON.stringify({ id: user.id, reason }),
       });
       showToast("success", response.message);
       await loadUsers();
@@ -5596,6 +6180,7 @@ function ShopManagementPanel({ token, shops, onClose, onChanged, showToast }) {
 
 function WarehouseManagementPanel({ token, onClose, onDataChanged, showToast }) {
   const [warehouses, setWarehouses] = useState([]);
+  const [maxWarehouses, setMaxWarehouses] = useState(6);
   const [loading, setLoading] = useState(true);
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -5610,6 +6195,7 @@ function WarehouseManagementPanel({ token, onClose, onDataChanged, showToast }) 
     try {
       const response = await apiRequest("/warehouses/list.php", { token });
       setWarehouses(response.data.warehouses);
+      setMaxWarehouses(response.data.max_warehouses);
     } catch (error) {
       showToast("error", error.message);
     } finally {
@@ -5679,7 +6265,7 @@ function WarehouseManagementPanel({ token, onClose, onDataChanged, showToast }) 
           <span className="product-modal-icon"><Boxes size={22} /></span>
           <div>
             <h2 id="warehouse-management-title">গুদাম সেটআপ</h2>
-            <p>সব দোকানের ক্রয় ও স্টক ব্যবস্থাপনায় ব্যবহারযোগ্য সর্বোচ্চ ৩টি গুদাম।</p>
+            <p>সব দোকানের ক্রয় ও স্টক ব্যবস্থাপনায় ব্যবহারযোগ্য সর্বোচ্চ {numberFormatter.format(maxWarehouses)}টি গুদাম।</p>
           </div>
           <button
             aria-label="গুদাম সেটআপ বন্ধ করুন"
@@ -5730,7 +6316,7 @@ function WarehouseManagementPanel({ token, onClose, onDataChanged, showToast }) 
               </label>
             </div>
             <footer className="product-form-actions">
-              <span>{warehouses.length}/৩টি গুদাম</span>
+              <span>{numberFormatter.format(warehouses.length)}/{numberFormatter.format(maxWarehouses)}টি গুদাম</span>
               <div>
                 <button
                   className="product-cancel-button"
@@ -5750,8 +6336,8 @@ function WarehouseManagementPanel({ token, onClose, onDataChanged, showToast }) 
         ) : (
           <div className="user-list-content">
             <div className="user-list-toolbar">
-              <span>{warehouses.length}/৩টি গুদাম খোলা হয়েছে · সব দোকানের জন্য</span>
-              {warehouses.length < 3 ? (
+              <span>{numberFormatter.format(warehouses.length)}/{numberFormatter.format(maxWarehouses)}টি গুদাম খোলা হয়েছে · সব দোকানের জন্য</span>
+              {warehouses.length < maxWarehouses ? (
                 <button className="product-save-button" onClick={startCreate} type="button">
                   <UserPlus size={17} /> নতুন গুদাম
                 </button>
@@ -5793,9 +6379,9 @@ function WarehouseManagementPanel({ token, onClose, onDataChanged, showToast }) 
                 </table>
               </div>
             )}
-            {warehouses.length >= 3 ? (
+            {warehouses.length >= maxWarehouses ? (
               <p className="user-management-note">
-                সর্বোচ্চ ৩টি গুদাম খোলা আছে। সীমা বাড়াতে ডেভেলপারের অনুমোদন নিতে হবে।
+                সর্বোচ্চ {numberFormatter.format(maxWarehouses)}টি গুদাম খোলা আছে। সীমা বাড়াতে ডেভেলপারের অনুমোদন নিতে হবে।
               </p>
             ) : null}
           </div>
@@ -5889,6 +6475,126 @@ function UserPresencePanel({ token, shopId }) {
   );
 }
 
+function DeleteAuditLogPanel({ token, onClose, showToast }) {
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [entries, setEntries] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function loadLogs(searchValue = appliedSearch, pageValue = 1) {
+    setLoading(true);
+    setError("");
+    try {
+      const query = new URLSearchParams({ search: searchValue, page: String(pageValue) });
+      const response = await apiRequest(`/audit/deletions.php?${query.toString()}`, { token });
+      setEntries(response.data.entries);
+      setPage(response.data.page);
+      setPageCount(response.data.page_count);
+      setTotal(response.data.total);
+      setAppliedSearch(searchValue);
+    } catch (requestError) {
+      setError(requestError.message);
+      showToast("error", requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadLogs("", 1);
+  }, [token]);
+
+  const entityLabels = {
+    product: "পণ্য",
+    customer: "কাস্টমার",
+    supplier: "সাপ্লায়ার",
+    bank_account: "ব্যাংক হিসাব",
+    sale: "বিক্রয় মেমো",
+    purchase: "ক্রয় চালান",
+    user: "ইউজার",
+  };
+  const formatDeletedAt = (value) => {
+    const date = new Date(value.replace(" ", "T"));
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("bn-BD", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      numberingSystem: "latn",
+    }).format(date);
+  };
+
+  return (
+    <div className="product-modal-backdrop">
+      <section aria-labelledby="delete-audit-title" aria-modal="true" className="product-modal user-management-modal delete-audit-modal" role="dialog">
+        <header className="product-modal-header">
+          <span className="product-modal-icon"><ClipboardList size={22} /></span>
+          <div><h2 id="delete-audit-title">ডিলিট লগ</h2><p>কে, কখন, কোন রেকর্ড কী কারণে মুছেছেন—সার্চ করে দেখুন।</p></div>
+          <button aria-label="ডিলিট লগ বন্ধ করুন" className="product-modal-close" onClick={onClose} type="button"><X size={20} /></button>
+        </header>
+        <div className="user-list-content">
+          <form className="delete-audit-search" onSubmit={(event) => {
+            event.preventDefault();
+            loadLogs(search.trim(), 1);
+          }}>
+            <label className="product-list-search">
+              <span>সার্চ</span>
+              <input
+                className="product-field-control"
+                maxLength={120}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="নাম, দোকান, ইউজার বা মুছার কারণ"
+                value={search}
+              />
+            </label>
+            <button className="product-save-button" disabled={loading} type="submit">
+              {loading ? <span className="button-spinner" /> : <Search size={16} />} খুঁজুন
+            </button>
+          </form>
+          <div className="user-list-toolbar">
+            <span>মোট {numberFormatter.format(total)}টি রেকর্ড</span>
+            <div className="delete-audit-pagination">
+              <button className="user-action-button" disabled={loading || page <= 1} onClick={() => loadLogs(appliedSearch, page - 1)} type="button">আগের</button>
+              <strong>{numberFormatter.format(page)} / {numberFormatter.format(pageCount)}</strong>
+              <button className="user-action-button" disabled={loading || page >= pageCount} onClick={() => loadLogs(appliedSearch, page + 1)} type="button">পরের</button>
+            </div>
+          </div>
+          {error ? (
+            <div className="user-list-empty" role="alert">{error}</div>
+          ) : loading ? (
+            <div className="user-list-empty"><span className="button-spinner" /> ডিলিট লগ লোড হচ্ছে...</div>
+          ) : entries.length ? (
+            <div className="user-table-wrap delete-audit-table-wrap">
+              <table className="user-management-table delete-audit-table">
+                <thead><tr><th>সময়</th><th>দোকান</th><th>রেকর্ড</th><th>যিনি মুছেছেন</th><th>কারণ</th></tr></thead>
+                <tbody>
+                  {entries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{formatDeletedAt(entry.deleted_at)}</td>
+                      <td>{entry.shop_name || "—"}</td>
+                      <td><strong>{entityLabels[entry.entity_type] || entry.entity_type} · {entry.record_label}</strong><small>রেকর্ড #{entry.record_id}</small></td>
+                      <td>{entry.actor_name}<small>@{entry.actor_username}</small></td>
+                      <td className="delete-audit-reason">{entry.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="user-list-empty">সার্চের সাথে মেলে এমন ডিলিট লগ নেই।</div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function WelcomePage({ user, token, onLogout, showToast }) {
   const [activeTab, setActiveTab] = useState(() => (
     user.role === "owner" || user.permissions?.includes("overview")
@@ -5902,21 +6608,26 @@ function WelcomePage({ user, token, onLogout, showToast }) {
   const [showBankSetup, setShowBankSetup] = useState(false);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [showSalesForm, setShowSalesForm] = useState(false);
+  const [showCustomerPaymentForm, setShowCustomerPaymentForm] = useState(false);
   const [showCustomerReturnForm, setShowCustomerReturnForm] = useState(false);
   const [showSupplierReturnForm, setShowSupplierReturnForm] = useState(false);
   const [showDamageStockForm, setShowDamageStockForm] = useState(false);
   const [showStockReport, setShowStockReport] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
+  const [showCustomerLedger, setShowCustomerLedger] = useState(false);
   const [showPurchaseReport, setShowPurchaseReport] = useState(false);
   const [showWarehouseStock, setShowWarehouseStock] = useState(false);
   const [showWarehouseTransfer, setShowWarehouseTransfer] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showShopManagement, setShowShopManagement] = useState(false);
   const [showWarehouseManagement, setShowWarehouseManagement] = useState(false);
+  const [showDeleteAuditLog, setShowDeleteAuditLog] = useState(false);
   const [shops, setShops] = useState([]);
   const [dashboardSummary, setDashboardSummary] = useState(null);
   const [dashboardSummaryLoading, setDashboardSummaryLoading] = useState(false);
   const [dashboardSummaryError, setDashboardSummaryError] = useState(false);
+  const [smsBalance, setSmsBalance] = useState(null);
+  const [smsBalanceLoading, setSmsBalanceLoading] = useState(false);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [activityMemo, setActivityMemo] = useState(null);
   const [loadingActivityMemoId, setLoadingActivityMemoId] = useState(null);
@@ -5937,6 +6648,8 @@ function WelcomePage({ user, token, onLogout, showToast }) {
   const today = new Intl.DateTimeFormat("bn-BD", { dateStyle: "full", numberingSystem: "latn" }).format(new Date());
   const canEditSetup = user.role === "owner" || user.permissions?.includes("can_edit");
   const canDeleteSetup = user.role === "owner" || user.permissions?.includes("can_delete");
+  const canManageSales = user.role === "owner" || user.permissions?.includes("sales");
+  const canManagePurchases = user.role === "owner" || user.permissions?.includes("purchase");
   const refreshDashboardSummary = () => setDashboardRefreshKey((current) => current + 1);
 
   useEffect(() => {
@@ -6025,6 +6738,29 @@ function WelcomePage({ user, token, onLogout, showToast }) {
     };
   }, [token, selectedShopId, dashboardRefreshKey, showToast]);
 
+  useEffect(() => {
+    if (!selectedShopId || (user.role !== "owner" && !user.permissions?.includes("overview"))) {
+      setSmsBalance(null);
+      return undefined;
+    }
+    let active = true;
+    setSmsBalance(null);
+    setSmsBalanceLoading(true);
+    apiRequest("/sms/balance.php", { token, shopId: selectedShopId })
+      .then((response) => {
+        if (active) setSmsBalance(response.data.sms_balance);
+      })
+      .catch(() => {
+        if (active) setSmsBalance({ available: false, balance: null, message: "ব্যালেন্স লোড করা যায়নি" });
+      })
+      .finally(() => {
+        if (active) setSmsBalanceLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, selectedShopId, dashboardRefreshKey, user.role, user.permissions]);
+
   async function reloadShops(selectShopId) {
     const response = await apiRequest("/shops/list.php", { token });
     setShops(response.data.shops);
@@ -6048,6 +6784,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
         sale: `/sales/receipt.php?id=${encodeURIComponent(activity.activity_id)}`,
         purchase: `/purchases/receipt.php?id=${encodeURIComponent(activity.activity_id)}`,
         supplier_payment: `/supplier-payments/receipt.php?id=${encodeURIComponent(activity.activity_id)}`,
+        customer_payment: `/customer-payments/receipt.php?id=${encodeURIComponent(activity.activity_id)}`,
       };
       const response = await apiRequest(endpoints[activity.activity_type], { token, shopId: selectedShopId });
       const receipt = activity.activity_type === "sale"
@@ -6128,6 +6865,10 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       setShowSalesReport(true);
       return;
     }
+    if (module.key === "customer-ledger") {
+      setShowCustomerLedger(true);
+      return;
+    }
     if (module.key === "purchase-report") {
       setShowPurchaseReport(true);
       return;
@@ -6138,6 +6879,10 @@ function WelcomePage({ user, token, onLogout, showToast }) {
     }
     if (module.key === "sales-return") {
       setShowCustomerReturnForm(true);
+      return;
+    }
+    if (module.key === "customer-payment") {
+      setShowCustomerPaymentForm(true);
       return;
     }
     showToast("info", `${module.title} মডিউলটি পরবর্তী ধাপে চালু হবে।`);
@@ -6156,10 +6901,12 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       "warehouse-transfer": ["total_transfers", "ট্রান্সফার"],
       "supplier-return": ["total_supplier_returns", "রিটার্ন"],
       "supplier-payment": ["total_supplier_payments", "পেমেন্ট"],
+      "customer-payment": ["total_customer_payments", "আদায়"],
       "stock-damage": ["total_stock_damages", "এন্ট্রি"],
       "sales-create": ["total_sales", "বিক্রয়"],
       "sales-return": ["total_sales_returns", "রিটার্ন"],
       "sales-report": ["total_sales", "বিল"],
+      "customer-ledger": ["total_customers", "কাস্টমার"],
       "purchase-report": ["total_purchases", "বিল"],
       "stock-report": ["total_products", "পণ্য"],
       "warehouse-stock": ["total_warehouse_stock_items", "স্টক আইটেম"],
@@ -6280,6 +7027,16 @@ function WelcomePage({ user, token, onLogout, showToast }) {
           token={token}
         />
       ) : null}
+      {showCustomerPaymentForm ? (
+        <CustomerPaymentForm
+          onClose={() => setShowCustomerPaymentForm(false)}
+          onDataChanged={refreshDashboardSummary}
+          showToast={showToast}
+          shop={activeShop}
+          shopId={selectedShopId}
+          token={token}
+        />
+      ) : null}
       {showCustomerReturnForm ? (
         <CustomerReturnForm
           onClose={() => setShowCustomerReturnForm(false)}
@@ -6329,7 +7086,19 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       ) : null}
       {showSalesReport ? (
         <SalesReportPanel
+          canDelete={canDeleteSetup && canManageSales}
+          canEdit={canEditSetup && canManageSales}
           onClose={() => setShowSalesReport(false)}
+          onChanged={refreshDashboardSummary}
+          showToast={showToast}
+          shop={activeShop}
+          shopId={selectedShopId}
+          token={token}
+        />
+      ) : null}
+      {showCustomerLedger ? (
+        <CustomerLedgerPanel
+          onClose={() => setShowCustomerLedger(false)}
           showToast={showToast}
           shop={activeShop}
           shopId={selectedShopId}
@@ -6338,7 +7107,10 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       ) : null}
       {showPurchaseReport ? (
         <PurchaseReportPanel
+          canDelete={canDeleteSetup && canManagePurchases}
+          canEdit={canEditSetup && canManagePurchases}
           onClose={() => setShowPurchaseReport(false)}
+          onChanged={refreshDashboardSummary}
           showToast={showToast}
           shop={activeShop}
           shopId={selectedShopId}
@@ -6393,6 +7165,13 @@ function WelcomePage({ user, token, onLogout, showToast }) {
           token={token}
         />
       ) : null}
+      {showDeleteAuditLog && user.role === "owner" ? (
+        <DeleteAuditLogPanel
+          onClose={() => setShowDeleteAuditLog(false)}
+          showToast={showToast}
+          token={token}
+        />
+      ) : null}
       <header className="welcome-header">
         <div className="dashboard-header-inner">
           <div className="welcome-brand">
@@ -6411,6 +7190,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
                   className="active-shop-select"
                   onChange={(event) => changeShop({ target: { value: event.target.value } })}
                   options={shops.map((shop) => ({ value: shop.id, label: shop.shop_name }))}
+                  portalOptions
                   placeholder="দোকান লিখে খুঁজুন"
                   value={selectedShopId}
                 />
@@ -6528,9 +7308,15 @@ function WelcomePage({ user, token, onLogout, showToast }) {
         {user.role === "owner" || user.permissions?.includes("overview") ? (
         <section className="dashboard-metrics" aria-label="দোকানের সারাংশ">
           {DASHBOARD_METRICS.map(({ key, label, icon: Icon, color, note }) => {
-            const value = dashboardSummary?.[key];
+            const value = key === "sms_balance" ? smsBalance?.balance : dashboardSummary?.[key];
             const formattedValue = key === "warranty_claims"
               ? "চালু নয়"
+              : key === "sms_balance"
+                ? (smsBalanceLoading
+                  ? "লোড হচ্ছে…"
+                  : smsBalance?.available
+                    ? numberFormatter.format(Number(value))
+                    : "—")
               : value === undefined
                 ? (dashboardSummaryLoading ? "লোড হচ্ছে…" : "—")
                 : key === "today_sales" || key === "today_purchases"
@@ -6541,7 +7327,11 @@ function WelcomePage({ user, token, onLogout, showToast }) {
               <span className="metric-icon"><Icon size={20} /></span>
               <span className="metric-label">{label}</span>
               <strong className={`metric-value ${key === "warranty_claims" ? "metric-value-unavailable" : ""}`}>{formattedValue}</strong>
-              <span className="metric-note">{dashboardSummaryError ? "তথ্য লোড করা যায়নি" : note}</span>
+              <span className="metric-note">
+                {key === "sms_balance"
+                  ? smsBalance?.message || note
+                  : dashboardSummaryError ? "তথ্য লোড করা যায়নি" : note}
+              </span>
             </article>
           );
           })}
@@ -6573,7 +7363,10 @@ function WelcomePage({ user, token, onLogout, showToast }) {
                     const isSale = activity.activity_type === "sale";
                     const isPurchase = activity.activity_type === "purchase";
                     const isSupplierPayment = activity.activity_type === "supplier_payment";
-                    const activityKind = isSale ? "বিক্রয়" : isPurchase ? "ক্রয়" : "সাপ্লায়ার পেমেন্ট";
+                    const isCustomerPayment = activity.activity_type === "customer_payment";
+                    const activityKind = isSale
+                      ? "বিক্রয়"
+                      : isPurchase ? "ক্রয়" : isCustomerPayment ? "বাকি আদায়" : "সাপ্লায়ার পেমেন্ট";
                     const activityKey = `${activity.activity_type}-${activity.activity_id}`;
                     const activityDate = new Date(`${activity.activity_date}T00:00:00`);
                     const formattedDate = Number.isNaN(activityDate.getTime())
@@ -6589,7 +7382,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
                           <small>{activity.party} · {formattedDate}</small>
                         </span>
                         <strong className={`dashboard-activity-amount ${isSale ? "activity-sale-amount" : isSupplierPayment ? "activity-payment-amount" : ""}`}>
-                          {isSupplierPayment ? "− " : ""}৳ {formatMoney(activity.amount)}
+                          {isSupplierPayment ? "− " : isCustomerPayment ? "+ " : ""}৳ {formatMoney(activity.amount)}
                         </strong>
                         <button
                           aria-label={`${activityKind} ${activity.reference} মেমো প্রিন্ট করুন`}
@@ -6644,6 +7437,11 @@ function WelcomePage({ user, token, onLogout, showToast }) {
                   <span className="panel-eyebrow">QUICK ACCESS</span>
                   <h2><ArrowUpRight size={19} /> দ্রুত কাজ</h2>
                 </div>
+                {user.role === "owner" ? (
+                  <button className="user-action-button delete-audit-open-button" onClick={() => setShowDeleteAuditLog(true)} type="button">
+                    <ClipboardList size={15} /> ডিলিট লগ
+                  </button>
+                ) : null}
               </div>
               <div className="quick-action-list">
                 {user.role === "owner" || user.permissions?.includes("sales") ? <button type="button" onClick={() => setActiveTab("sales")}>
@@ -6662,7 +7460,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
                   <ArrowRight size={17} />
                 </button> : null}
               </div>
-              {user.role === "owner" ? (
+              {user.role === "owner" || (user.role === "manager" && user.permissions?.includes("overview")) ? (
                 <UserPresencePanel token={token} shopId={selectedShopId} />
               ) : null}
             </article>

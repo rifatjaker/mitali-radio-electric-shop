@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/helpers.php';
+require_once dirname(__DIR__) . '/delete-audit.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     respond(405, false, 'ব্যাংক হিসাব মুছতে POST অনুরোধ পাঠান।');
@@ -18,12 +19,13 @@ $accountId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
 if ($accountId === false || $accountId === null || $accountId < 1) {
     respond(422, false, 'সঠিক ব্যাংক হিসাব নির্বাচন করুন।');
 }
+$reason = validatedDeletionReason($body);
 
 try {
     $pdo = database();
     $pdo->beginTransaction();
     $lookup = $pdo->prepare(
-        'SELECT opening_balance FROM bank_accounts
+        'SELECT bank_name, account_name, opening_balance FROM bank_accounts
          WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
     );
     $lookup->execute(['id' => $accountId, 'shop_id' => $shopId]);
@@ -38,15 +40,32 @@ try {
     }
     $paymentCheck = $pdo->prepare(
         'SELECT 1 FROM supplier_payments
-         WHERE bank_account_id = :bank_account_id AND shop_id = :shop_id
+         WHERE bank_account_id = :supplier_bank_account_id AND shop_id = :supplier_shop_id
+         UNION ALL
+         SELECT 1 FROM customer_payments
+         WHERE bank_account_id = :customer_bank_account_id AND shop_id = :customer_shop_id
          LIMIT 1'
     );
-    $paymentCheck->execute(['bank_account_id' => $accountId, 'shop_id' => $shopId]);
+    $paymentCheck->execute([
+        'supplier_bank_account_id' => $accountId,
+        'supplier_shop_id' => $shopId,
+        'customer_bank_account_id' => $accountId,
+        'customer_shop_id' => $shopId,
+    ]);
     if ($paymentCheck->fetchColumn()) {
         $pdo->rollBack();
         respond(409, false, 'পেমেন্টে ব্যবহৃত ব্যাংক হিসাব মুছে ফেলা যাবে না।');
     }
 
+    recordDeletionAudit(
+        $pdo,
+        $shopId,
+        $user,
+        'bank_account',
+        (int) $accountId,
+        $account['bank_name'] . ' · ' . $account['account_name'],
+        $reason
+    );
     $delete = $pdo->prepare(
         'DELETE FROM bank_accounts WHERE id = :id AND shop_id = :shop_id'
     );
