@@ -132,11 +132,13 @@ function normalizeSmsMobile(string $mobileNumber): string
     $digits = preg_replace('/\D+/', '', $digits) ?? '';
     if (str_starts_with($digits, '00880')) {
         $digits = substr($digits, 2);
-    } elseif (str_starts_with($digits, '880')) {
-        $digits = '0' . substr($digits, 3);
+    } elseif (str_starts_with($digits, '0')) {
+        $digits = '88' . $digits;
+    } elseif (!str_starts_with($digits, '88')) {
+        $digits = '880' . $digits;
     }
 
-    return preg_match('/^01[3-9]\d{8}$/', $digits) ? $digits : '';
+    return preg_match('/^8801[3-9]\d{8}$/', $digits) ? $digits : '';
 }
 
 function formatSmsMoney(float $amount): string

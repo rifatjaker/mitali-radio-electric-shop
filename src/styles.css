@@ -1858,6 +1858,10 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.purchase-modal .product-form-grid > .product-form-field > .product-field-label {
+  min-height: 30px;
+}
+
 .purchase-cart-heading {
   display: flex;
   align-items: center;

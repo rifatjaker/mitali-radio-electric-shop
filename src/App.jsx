@@ -1426,7 +1426,17 @@ function CustomerSetupForm({
   );
 }
 
-function SupplierSetupForm({ token, shopId, onClose, onDataChanged, showToast, canEdit, canDelete }) {
+function SupplierSetupForm({
+  token,
+  shopId,
+  onClose,
+  onDataChanged,
+  onSupplierCreated,
+  showToast,
+  canEdit,
+  canDelete,
+  initialShowEditor = false,
+}) {
   const [values, setValues] = useState({
     supplier_name: "",
     mobile_number: "",
@@ -1438,7 +1448,7 @@ function SupplierSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
   });
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
-  const [showEditor, setShowEditor] = useState(false);
+  const [showEditor, setShowEditor] = useState(initialShowEditor);
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [saving, setSaving] = useState(false);
   const [supplierSearch, setSupplierSearch] = useState("");
@@ -1536,6 +1546,9 @@ function SupplierSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
       showToast("success", response.message);
       await loadSuppliers();
       onDataChanged();
+      if (!editingSupplier && response.data?.supplier) {
+        onSupplierCreated?.(response.data.supplier);
+      }
       setShowEditor(false);
       setEditingSupplier(null);
     } catch (error) {
@@ -2090,12 +2103,22 @@ function BankSetupForm({ token, shopId, onClose, onDataChanged, showToast, canEd
   );
 }
 
-function PurchaseForm({ token, shopId, onClose, onSaved, showToast, initialPurchase = null }) {
+function PurchaseForm({
+  token,
+  shopId,
+  onClose,
+  onSaved,
+  onDataChanged = () => {},
+  showToast,
+  canCreateSupplier = false,
+  initialPurchase = null,
+}) {
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showQuickSupplierForm, setShowQuickSupplierForm] = useState(false);
   const [values, setValues] = useState(() => ({
     supplier_id: initialPurchase ? String(initialPurchase.supplier_id) : "",
     bill_number: initialPurchase?.bill_number || "",
@@ -2144,6 +2167,12 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast, initialPurch
   function updateField(event) {
     const { name, value } = event.target;
     setValues((current) => ({ ...current, [name]: value }));
+  }
+
+  function handleQuickSupplierCreated(supplier) {
+    setSuppliers((current) => [...current.filter((entry) => entry.id !== supplier.id), supplier]);
+    updateField({ target: { name: "supplier_id", value: String(supplier.id) } });
+    setShowQuickSupplierForm(false);
   }
 
   function updateItem(rowId, fieldName, value) {
@@ -2236,6 +2265,7 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast, initialPurch
   }
 
   return (
+    <>
     <div className="product-modal-backdrop">
       <section
         aria-labelledby="purchase-form-title"
@@ -2262,17 +2292,28 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast, initialPurch
 
         {loading ? (
           <div className="user-list-empty"><span className="button-spinner" /> ক্রয়ের তথ্য লোড হচ্ছে...</div>
-        ) : products.length === 0 || suppliers.length === 0 ? (
+        ) : products.length === 0 ? (
           <div className="user-list-empty purchase-empty-state">
-            {products.length === 0
-              ? "এই দোকানে পণ্য নেই। আগে পণ্য সেটআপ থেকে পণ্য যোগ করুন।"
-              : "এই দোকানে সাপ্লায়ার নেই। আগে সাপ্লায়ার সেটআপ থেকে সাপ্লায়ার যোগ করুন।"}
+            এই দোকানে পণ্য নেই। আগে পণ্য সেটআপ থেকে পণ্য যোগ করুন।
           </div>
         ) : (
           <form className="product-form" onSubmit={handleSubmit}>
             <div className="product-form-grid">
-              <label className="product-form-field" htmlFor="purchase-supplier">
-                <span className="product-field-label">সাপ্লায়ার</span>
+              <div className="product-form-field">
+                <div className="sales-customer-field-heading">
+                  <label className="product-field-label" htmlFor="purchase-supplier">সাপ্লায়ার</label>
+                  {canCreateSupplier ? (
+                    <button
+                      aria-label="নতুন সাপ্লায়ার যোগ করুন"
+                      className="user-action-button customer-quick-add"
+                      onClick={() => setShowQuickSupplierForm(true)}
+                      title="নতুন সাপ্লায়ার যোগ করুন"
+                      type="button"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  ) : null}
+                </div>
                 <SearchableSelect
                   className="product-field-control product-select-control"
                   id="purchase-supplier"
@@ -2289,7 +2330,8 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast, initialPurch
                   required
                   value={values.supplier_id}
                 />
-              </label>
+                {suppliers.length === 0 ? <small>চালান চালিয়ে যেতে নতুন সাপ্লায়ার যোগ করুন।</small> : null}
+              </div>
               <label className="product-form-field" htmlFor="purchase-bill-number">
                 <span className="product-field-label">সাপ্লায়ারের চালান নম্বর <span className="optional-label">ঐচ্ছিক</span></span>
                 <input
@@ -2496,6 +2538,21 @@ function PurchaseForm({ token, shopId, onClose, onSaved, showToast, initialPurch
         )}
       </section>
     </div>
+    {showQuickSupplierForm && typeof document !== "undefined" ? createPortal(
+      <SupplierSetupForm
+        canDelete={false}
+        canEdit={false}
+        initialShowEditor
+        onClose={() => setShowQuickSupplierForm(false)}
+        onDataChanged={onDataChanged}
+        onSupplierCreated={handleQuickSupplierCreated}
+        showToast={showToast}
+        shopId={shopId}
+        token={token}
+      />,
+      document.body,
+    ) : null}
+    </>
   );
 }
 
@@ -5477,7 +5534,17 @@ function SalesReportPanel({ token, shopId, shop, onClose, onChanged, showToast, 
   );
 }
 
-function PurchaseReportPanel({ token, shopId, shop, onClose, onChanged, showToast, canEdit, canDelete }) {
+function PurchaseReportPanel({
+  token,
+  shopId,
+  shop,
+  onClose,
+  onChanged,
+  showToast,
+  canEdit,
+  canDelete,
+  canCreateSupplier = false,
+}) {
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const [filters, setFilters] = useState({
     date_from: today,
@@ -5631,8 +5698,10 @@ function PurchaseReportPanel({ token, shopId, shop, onClose, onChanged, showToas
     {purchaseReceipt ? <ActivityReceiptMemo receipt={purchaseReceipt} type="purchase" shop={shop} onClose={() => setPurchaseReceipt(null)} /> : null}
     {editingPurchase ? (
       <PurchaseForm
+        canCreateSupplier={canCreateSupplier}
         initialPurchase={editingPurchase}
         onClose={() => setEditingPurchase(null)}
+        onDataChanged={onChanged}
         onSaved={() => {
           setEditingPurchase(null);
           onChanged();
@@ -7080,7 +7149,9 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       ) : null}
       {showPurchaseForm ? (
         <PurchaseForm
+          canCreateSupplier={user.role === "owner" || user.permissions?.includes("setup")}
           onClose={() => setShowPurchaseForm(false)}
+          onDataChanged={refreshDashboardSummary}
           onSaved={() => {
             setShowPurchaseForm(false);
             refreshDashboardSummary();
@@ -7183,6 +7254,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
         <PurchaseReportPanel
           canDelete={canDeleteSetup && canManagePurchases}
           canEdit={canEditSetup && canManagePurchases}
+          canCreateSupplier={user.role === "owner" || user.permissions?.includes("setup")}
           onClose={() => setShowPurchaseReport(false)}
           onChanged={refreshDashboardSummary}
           showToast={showToast}

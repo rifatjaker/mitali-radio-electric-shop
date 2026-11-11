@@ -1,0 +1,85 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Lint SMS helper syntax",
+			"type": "shell",
+			"command": "php",
+			"args": [
+				"-l",
+				"E:\\My Projects\\mitali_radio_electric\\backend\\api\\sms.php"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "PHP SMS normalization regression check",
+			"type": "shell",
+			"command": "php",
+			"args": [
+				"-r",
+				"require \"backend/api/sms.php\"; $actual = normalizeSmsMobile(\"01843-818783\"); if ($actual !== \"8801843818783\") { fwrite(STDERR, \"Unexpected number: $actual\\n\"); exit(1); } echo $actual, PHP_EOL;"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run SMS normalization regression check",
+			"type": "shell",
+			"command": "php",
+			"args": [
+				"backend\\api\\_sms_normalization_check.php"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build quick supplier purchase flow",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Check supplier feature diff",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--check"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check alignment diff",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--check"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify purchase field alignment",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			]
+		}
+	]
+}
