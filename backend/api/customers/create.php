@@ -57,12 +57,12 @@ function customerOptionalAmount(
 
 $mobileNumber = customerOptionalText($body, 'mobile_number', 'মোবাইল নম্বর', 20);
 if ($mobileNumber !== null) {
-    if (!preg_match('/^[0-9০-৯+().\-\s]+$/u', $mobileNumber)) {
-        respond(422, false, 'মোবাইল নম্বরে শুধু সংখ্যা, +, বন্ধনী, হাইফেন ও ফাঁকা স্থান ব্যবহার করুন।');
+    if (!preg_match('/^[0-9+().\-\s]+$/u', $mobileNumber)) {
+        respond(422, false, 'SMS পাঠানোর জন্য মোবাইল নম্বর ইংরেজি সংখ্যায় লিখুন।');
     }
-    preg_match_all('/[0-9০-৯]/u', $mobileNumber, $digits);
+    preg_match_all('/[0-9]/', $mobileNumber, $digits);
     if (count($digits[0]) < 7 || count($digits[0]) > 15) {
-        respond(422, false, 'মোবাইল নম্বরে ৭ থেকে ১৫টি সংখ্যা লিখুন।');
+        respond(422, false, 'মোবাইল নম্বরে ৭ থেকে ১৫টি ইংরেজি সংখ্যা লিখুন।');
     }
 }
 
@@ -106,6 +106,8 @@ try {
             'customer_name' => $customerName,
             'mobile_number' => $mobileNumber,
             'customer_level' => $customerLevel,
+            'opening_balance' => $openingBalance,
+            'current_balance' => $openingBalance,
         ],
     ]);
 } catch (PDOException $exception) {

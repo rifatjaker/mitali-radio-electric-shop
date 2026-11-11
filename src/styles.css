@@ -2123,6 +2123,22 @@ button {
   font-size: 10px;
 }
 
+.sales-customer-field-heading {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.customer-quick-add {
+  flex: 0 0 auto;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 5px;
+  color: #236d46;
+}
+
 .sales-cart-heading {
   margin-top: 16px;
 }
@@ -5065,6 +5081,11 @@ button {
 .customer-setup-modal .product-form-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px 22px;
+}
+
+.customer-mobile-hint {
+  color: #748278;
+  font-size: 11px;
 }
 
 .supplier-setup-modal .product-form-grid {

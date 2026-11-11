@@ -1002,7 +1002,17 @@ function ProductSetupForm({ token, shopId, onClose, onDataChanged, showToast, ca
 
 const CUSTOMER_LEVELS = ["সাধারণ", "নিয়মিত", "প্রিমিয়াম", "বিশেষ"];
 
-function CustomerSetupForm({ token, shopId, onClose, onDataChanged, showToast, canEdit, canDelete }) {
+function CustomerSetupForm({
+  token,
+  shopId,
+  onClose,
+  onDataChanged,
+  onCustomerCreated,
+  showToast,
+  canEdit,
+  canDelete,
+  initialShowEditor = false,
+}) {
   const [values, setValues] = useState({
     customer_name: "",
     mobile_number: "",
@@ -1014,7 +1024,7 @@ function CustomerSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
   });
   const [customers, setCustomers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
-  const [showEditor, setShowEditor] = useState(false);
+  const [showEditor, setShowEditor] = useState(initialShowEditor);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [saving, setSaving] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -1096,6 +1106,17 @@ function CustomerSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
       document.getElementById("customer-name")?.focus();
       return;
     }
+    const mobileNumber = values.mobile_number.trim();
+    if (
+      mobileNumber &&
+      (!/^[0-9+().\-\s]+$/.test(mobileNumber) ||
+        (mobileNumber.match(/[0-9]/g) || []).length < 7 ||
+        (mobileNumber.match(/[0-9]/g) || []).length > 15)
+    ) {
+      showToast("error", "SMS পাঠানোর জন্য মোবাইল নম্বর ইংরেজি সংখ্যায় (৭–১৫ ডিজিট) লিখুন।");
+      document.getElementById("customer-mobile-number")?.focus();
+      return;
+    }
 
     setSaving(true);
     try {
@@ -1112,6 +1133,9 @@ function CustomerSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
       showToast("success", response.message);
       await loadCustomers();
       onDataChanged();
+      if (!editingCustomer && response.data?.customer) {
+        await onCustomerCreated?.(response.data.customer);
+      }
       setShowEditor(false);
       setEditingCustomer(null);
     } catch (error) {
@@ -1163,6 +1187,9 @@ function CustomerSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
             type={type}
           />
         )}
+        {name === "mobile_number" ? (
+          <span className="customer-mobile-hint">SMS পাঠানোর জন্য ইংরেজি সংখ্যায় লিখুন।</span>
+        ) : null}
       </label>
     );
   }
@@ -1215,7 +1242,7 @@ function CustomerSetupForm({ token, shopId, onClose, onDataChanged, showToast, c
         <form className="product-form" onSubmit={handleSubmit}>
           <div className="product-form-grid">
             {field("customer_name", "কাস্টমারের নাম", "যেমন: আব্দুল করিম")}
-            {field("mobile_number", "মোবাইল নম্বর", "যেমন: ০১৭১২৩৪৫৬৭৮")}
+            {field("mobile_number", "মোবাইল নম্বর", "যেমন: 01712345678")}
             {field("area", "এলাকা", "যেমন: ফেনী সদর")}
             {field("opening_balance", "পূর্বের বাকি (৳)", "0.00", {
               type: "number",
@@ -2518,7 +2545,16 @@ function SalesReceiptFooter() {
   );
 }
 
-function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, initialSale = null }) {
+function SalesForm({
+  token,
+  shopId,
+  shop,
+  onClose,
+  onSaved,
+  showToast,
+  canCreateCustomer = false,
+  initialSale = null,
+}) {
   const [customers, setCustomers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
@@ -2528,6 +2564,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, initialSa
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [saving, setSaving] = useState(false);
   const [receipt, setReceipt] = useState(null);
+  const [showQuickCustomerForm, setShowQuickCustomerForm] = useState(false);
   const [values, setValues] = useState({
     customer_id: "",
     customer_search: "",
@@ -2686,6 +2723,12 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, initialSa
       : ` · #${customer.id}`}`;
   }
 
+  function handleQuickCustomerCreated(customer) {
+    setCustomers((current) => [...current.filter((entry) => entry.id !== customer.id), customer]);
+    updateField({ target: { name: "customer_id", value: String(customer.id) } });
+    setShowQuickCustomerForm(false);
+  }
+
   function updateField(event) {
     const { name, value } = event.target;
     if (name === "customer_search") {
@@ -2713,6 +2756,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, initialSa
         ...current,
         customer_id: value,
         customer_search: "",
+        customer_name: value ? "" : current.customer_name,
         payment_method: value ? "credit" : "cash",
         payment_received: "",
       }));
@@ -2956,6 +3000,7 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, initialSa
   }
 
   return (
+    <>
     <div className={`product-modal-backdrop${receipt ? " sales-print-backdrop" : ""}`}>
       <section
         aria-labelledby="sales-form-title"
@@ -3100,7 +3145,20 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, initialSa
                 </label>
               ) : null}
               <div className="product-form-field">
-                <span className="product-field-label">কাস্টমার খুঁজুন (নাম/মোবাইল)</span>
+                <div className="sales-customer-field-heading">
+                  <span className="product-field-label">কাস্টমার খুঁজুন (নাম/মোবাইল)</span>
+                  {canCreateCustomer && !initialSale ? (
+                    <button
+                      aria-label="নতুন কাস্টমার যোগ করুন"
+                      className="user-action-button customer-quick-add"
+                      onClick={() => setShowQuickCustomerForm(true)}
+                      title="নতুন কাস্টমার যোগ করুন"
+                      type="button"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  ) : null}
+                </div>
                 <SearchableSelect
                   ariaLabel="কাস্টমার খুঁজুন (নাম/মোবাইল)"
                   disabled={Boolean(initialSale)}
@@ -3299,6 +3357,21 @@ function SalesForm({ token, shopId, shop, onClose, onSaved, showToast, initialSa
         )}
       </section>
     </div>
+    {showQuickCustomerForm && typeof document !== "undefined" ? createPortal(
+      <CustomerSetupForm
+        canDelete={false}
+        canEdit={false}
+        initialShowEditor
+        onClose={() => setShowQuickCustomerForm(false)}
+        onCustomerCreated={handleQuickCustomerCreated}
+        onDataChanged={onSaved}
+        showToast={showToast}
+        shopId={shopId}
+        token={token}
+      />,
+      document.body,
+    ) : null}
+    </>
   );
 }
 
@@ -7019,6 +7092,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       ) : null}
       {showSalesForm ? (
         <SalesForm
+          canCreateCustomer={user.role === "owner" || user.permissions?.includes("setup")}
           onClose={() => setShowSalesForm(false)}
           onSaved={refreshDashboardSummary}
           showToast={showToast}
