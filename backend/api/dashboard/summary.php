@@ -60,6 +60,11 @@ try {
             ) AS total_purchases,
             (
                 SELECT COUNT(*)
+                FROM quotations
+                WHERE shop_id = :total_quotations_shop_id
+            ) AS total_quotations,
+            (
+                SELECT COUNT(*)
                 FROM sale_returns sr
                 INNER JOIN sales s ON s.id = sr.sale_id
                 WHERE s.shop_id = :total_sales_returns_shop_id
@@ -119,6 +124,7 @@ try {
         'bank_accounts_shop_id' => $shopId,
         'total_sales_shop_id' => $shopId,
         'total_purchases_shop_id' => $shopId,
+        'total_quotations_shop_id' => $shopId,
         'total_sales_returns_shop_id' => $shopId,
         'total_supplier_returns_shop_id' => $shopId,
         'total_supplier_payments_shop_id' => $shopId,
@@ -200,6 +206,7 @@ try {
         'total_bank_accounts' => (int) $summary['total_bank_accounts'],
         'total_sales' => (int) $summary['total_sales'],
         'total_purchases' => (int) $summary['total_purchases'],
+        'total_quotations' => (int) $summary['total_quotations'],
         'total_sales_returns' => (int) $summary['total_sales_returns'],
         'total_supplier_returns' => (int) $summary['total_supplier_returns'],
         'total_supplier_payments' => (int) $summary['total_supplier_payments'],

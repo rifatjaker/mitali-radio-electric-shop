@@ -3215,6 +3215,178 @@ button {
   max-height: 94vh;
 }
 
+.quotation-panel {
+  width: min(1280px, 100%);
+}
+
+.quotation-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 0;
+  border-bottom: 1px solid #e8eee8;
+}
+
+.quotation-tabs button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #647269;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.quotation-tabs button.active {
+  border-bottom-color: #23804d;
+  color: #236d46;
+}
+
+.quotation-form {
+  max-height: calc(94vh - 145px);
+  overflow: auto;
+  padding-bottom: 18px;
+}
+
+.quotation-client-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.quotation-client-grid .product-form-field > .product-field-label {
+  min-height: 28px;
+}
+
+.quotation-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.6fr);
+  align-items: start;
+  gap: 20px;
+  margin-top: 18px;
+}
+
+.quotation-bottom-grid textarea {
+  min-height: 90px;
+}
+
+.quotation-calculation {
+  display: grid;
+  gap: 9px;
+}
+
+.quotation-calculation label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 140px);
+  align-items: center;
+  gap: 12px;
+  color: #4a5b4e;
+  font-size: 12px;
+}
+
+.quotation-calculation .product-field-control {
+  height: 36px;
+}
+
+.quotation-total {
+  padding-top: 9px;
+  border-top: 1px solid #e1e9e2;
+  color: #236d46 !important;
+  font-size: 14px !important;
+}
+
+.quotation-search {
+  display: flex;
+  gap: 9px;
+  padding: 16px 20px;
+}
+
+.quotation-search .product-field-control {
+  flex: 1 1 auto;
+}
+
+.quotation-list-table-wrap {
+  max-height: calc(94vh - 230px);
+}
+
+.quotation-list-table {
+  min-width: 820px;
+}
+
+.quotation-list-table td small {
+  display: block;
+  margin-top: 3px;
+  color: #748278;
+}
+
+.quotation-row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.quotation-row-actions .user-action-button,
+.quotation-row-actions .product-save-button {
+  min-height: 30px;
+  gap: 5px;
+  padding: 5px 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.quotation-status {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 20px;
+  background: #e8f5eb;
+  color: #28774a;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.quotation-status-expired,
+.quotation-status-cancelled {
+  background: #fff0ed;
+  color: #a34a3d;
+}
+
+.quotation-status-converted {
+  background: #eaf2ff;
+  color: #3968ad;
+}
+
+.quotation-greeting {
+  margin: 2px 0 0;
+  color: #435247;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.quotation-greeting strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #26352b;
+}
+
+.quotation-terms {
+  margin: 18px 0;
+  padding: 12px 14px;
+  border: 1px solid #e4ebe5;
+  border-radius: 8px;
+  color: #46564a;
+  font-size: 12px;
+}
+
+.quotation-terms p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
 .stock-report-filters {
   display: grid;
   grid-template-columns: repeat(4, minmax(120px, 1fr)) auto auto;
@@ -4528,6 +4700,46 @@ button {
     padding: 0;
   }
 
+  .quotation-tabs {
+    gap: 2px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .quotation-tabs button {
+    flex: 1 1 0;
+    justify-content: center;
+    gap: 5px;
+    padding-right: 5px;
+    padding-left: 5px;
+    font-size: 11px;
+  }
+
+  .quotation-form {
+    max-height: calc(94svh - 145px);
+  }
+
+  .quotation-client-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quotation-bottom-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .quotation-search {
+    padding: 13px 15px;
+  }
+
+  .quotation-list-table-wrap {
+    max-height: calc(94svh - 210px);
+  }
+
+  .quotation-row-actions {
+    flex-wrap: wrap;
+  }
+
   .product-modal {
     width: 100%;
     max-height: 94svh;
@@ -4978,6 +5190,14 @@ button {
 }
 
 @media (max-width: 360px) {
+  .quotation-client-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quotation-tabs button {
+    font-size: 10px;
+  }
+
   .dashboard-module-grid {
     grid-template-columns: 1fr;
   }

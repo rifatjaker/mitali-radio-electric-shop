@@ -364,6 +364,7 @@ const DASHBOARD_TABS = [
     description: "বিক্রয়, রিটার্ন এবং কাস্টমার পেমেন্ট",
     modules: [
       { key: "sales-create", title: "নতুন বিক্রয়", detail: "কাস্টমার বিল তৈরি করুন", icon: ShoppingCart },
+      { key: "quotation-create", title: "কোটেশন", detail: "কাস্টমার বা কোম্পানির জন্য পণ্যের মূল্য প্রস্তাব তৈরি ও প্রিন্ট করুন", icon: FileText },
       { key: "sales-return", title: "কাস্টমার রিটার্ন", detail: "আগের বিলের পণ্য ফেরত ও বকেয়া সমন্বয়", icon: RotateCcw },
       { key: "customer-payment", title: "বাকি আদায়", detail: "কাস্টমারের কাছ থেকে নগদ বা ব্যাংকে পেমেন্ট গ্রহণ", icon: Wallet },
     ],
@@ -2602,15 +2603,474 @@ function SalesReceiptFooter() {
   );
 }
 
+function QuotationMemo({ quotation, shop, onClose }) {
+  const formatDate = (date) => {
+    const [year, month, day] = String(date || "").split("-");
+    return year && month && day ? `${day}-${month}-${year}` : date;
+  };
+
+  useEffect(() => {
+    document.body.classList.add("printing-sales-memo");
+    return () => document.body.classList.remove("printing-sales-memo");
+  }, []);
+
+  return createPortal((
+    <div className="product-modal-backdrop sales-print-backdrop">
+      <section aria-label={`কোটেশন ${quotation.quotation_number}`} aria-modal="true" className="product-modal sales-modal" role="dialog">
+        <header className="product-modal-header no-print">
+          <span className="product-modal-icon"><FileText size={22} /></span>
+          <div><h2>কোটেশন</h2><p>{quotation.quotation_number}</p></div>
+          <button aria-label="কোটেশন বন্ধ করুন" className="product-modal-close" onClick={onClose} type="button"><X size={20} /></button>
+        </header>
+        <div className="sales-receipt quotation-print">
+          <div className="sales-receipt-heading">
+            <ShopPrintHeader shop={shop} />
+            <span className="sales-receipt-title">মূল্য প্রস্তাব / কোটেশন</span>
+            <div className="sales-receipt-meta">
+              <span><strong>কোটেশন নম্বর</strong><b>{quotation.quotation_number}</b></span>
+              <span><strong>ইস্যুর তারিখ</strong><b>{formatDate(quotation.issue_date)}</b></span>
+              <span><strong>মেয়াদ</strong><b>{formatDate(quotation.valid_until)}</b></span>
+              <span className="sales-receipt-customer-info">
+                <strong>প্রাপক:</strong>
+                <b>{[quotation.customer_name, quotation.mobile_number, quotation.address].filter(Boolean).join(", ")}</b>
+              </span>
+            </div>
+          </div>
+          <p className="quotation-greeting">
+            <strong>সম্মানিত মহোদয়/মহোদয়া,</strong>
+            আপনার প্রতিষ্ঠানের চাহিদা অনুযায়ী নিম্নোক্ত পণ্যসমূহের মূল্য প্রস্তাব সদয় বিবেচনার জন্য পেশ করা হলো।
+          </p>
+          <div className="sales-receipt-lines">
+            <table className="sales-receipt-table">
+              <thead><tr><th>পণ্যের নাম</th><th>পরিমাণ</th><th>একক</th><th>দর</th><th>মোট মূল্য</th></tr></thead>
+              <tbody>{quotation.items.map((item, index) => (
+                <tr key={`quotation-${item.id || index}`}>
+                  <td>{item.product_name}{item.product_code ? <small>{item.product_code}</small> : null}</td>
+                  <td>{numberFormatter.format(item.quantity)}</td>
+                  <td>{item.unit || "—"}</td>
+                  <td>৳ {formatMoney(item.unit_price)}</td>
+                  <td>৳ {formatMoney(item.line_total)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <dl className="sales-receipt-summary">
+            <div><dt>পণ্যের মূল্য</dt><dd>৳ {formatMoney(quotation.subtotal)}</dd></div>
+            <div><dt>ভ্যাট (+)</dt><dd>৳ {formatMoney(quotation.vat_amount)}</dd></div>
+            <div><dt>ছাড় (−)</dt><dd>৳ {formatMoney(quotation.discount_amount)}</dd></div>
+            <div className="sales-receipt-net"><dt>সর্বমোট প্রস্তাবিত মূল্য</dt><dd>৳ {formatMoney(quotation.total_amount)}</dd></div>
+          </dl>
+          {quotation.terms ? <div className="quotation-terms"><strong>শর্তাবলি</strong><p>{quotation.terms}</p></div> : null}
+          <div className="sales-receipt-footer">
+            <blockquote>আমাদের প্রস্তাবটি বিবেচনা করার জন্য ধন্যবাদ।</blockquote>
+            <div className="sales-receipt-signatures">
+              <div><span /><strong>কর্তৃপক্ষের স্বাক্ষর</strong></div>
+              <div><span /><strong>ক্রেতার স্বাক্ষর / সিল</strong></div>
+            </div>
+            <div className="sales-receipt-thanks">
+              <strong>কোটেশনের মেয়াদ</strong>
+              <span>{formatDate(quotation.valid_until)} পর্যন্ত প্রযোজ্য।</span>
+            </div>
+          </div>
+          <div className="sales-receipt-actions no-print">
+            <button className="user-action-button sales-receipt-print-button" onClick={() => window.print()} type="button"><Printer size={17} /> প্রিন্ট কোটেশন</button>
+            <button className="product-save-button" onClick={onClose} type="button">বন্ধ</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  ), document.body);
+}
+
+function QuotationPanel({ token, shopId, shop, onClose, onChanged, showToast }) {
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const defaultValidity = new Date(`${today}T00:00:00`);
+  defaultValidity.setDate(defaultValidity.getDate() + 30);
+  const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [quotations, setQuotations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState("create");
+  const [preview, setPreview] = useState(null);
+  const [conversionQuote, setConversionQuote] = useState(null);
+  const [loadingQuoteId, setLoadingQuoteId] = useState(null);
+  const [values, setValues] = useState({
+    customer_id: "",
+    customer_name: "",
+    mobile_number: "",
+    address: "",
+    issue_date: today,
+    valid_until: defaultValidity.toISOString().slice(0, 10),
+    vat_amount: "0",
+    discount_amount: "0",
+    terms: "",
+  });
+  const [items, setItems] = useState([
+    { rowId: 1, product_id: "", quantity: "1", unit_price: "" },
+  ]);
+  const [nextRowId, setNextRowId] = useState(2);
+
+  async function loadQuotations(searchText = search) {
+    const query = new URLSearchParams();
+    if (searchText.trim()) query.set("search", searchText.trim());
+    try {
+      const response = await apiRequest(`/quotations/list.php?${query.toString()}`, { token, shopId });
+      setQuotations(response.data.quotations);
+    } catch (error) {
+      showToast("error", error.message);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      apiRequest("/customers/list.php", { token, shopId }),
+      apiRequest("/products/list.php", { token, shopId }),
+      apiRequest("/quotations/list.php", { token, shopId }),
+    ])
+      .then(([customerResponse, productResponse, quotationResponse]) => {
+        if (!active) return;
+        setCustomers(customerResponse.data.customers);
+        setProducts(productResponse.data.products);
+        setQuotations(quotationResponse.data.quotations);
+      })
+      .catch((error) => {
+        if (active) showToast("error", error.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, shopId, showToast]);
+
+  function updateField(event) {
+    const { name, value } = event.target;
+    if (name === "customer_id") {
+      const customer = customers.find((entry) => String(entry.id) === value);
+      setValues((current) => ({
+        ...current,
+        customer_id: value,
+        customer_name: customer?.customer_name || (value ? current.customer_name : ""),
+        mobile_number: customer?.mobile_number || (value ? current.mobile_number : ""),
+        address: customer?.address || (value ? current.address : ""),
+      }));
+      return;
+    }
+    if (name === "customer_name" && values.customer_id) {
+      setValues((current) => ({ ...current, customer_id: "", customer_name: value }));
+      return;
+    }
+    setValues((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateQuotationItem(rowId, field, value) {
+    setItems((current) => current.map((item) => {
+      if (item.rowId !== rowId) return item;
+      if (field === "product_id") {
+        const product = products.find((entry) => String(entry.id) === String(value));
+        return {
+          ...item,
+          product_id: product ? String(product.id) : "",
+          unit_price: product?.sale_price || "",
+        };
+      }
+      return { ...item, [field]: value };
+    }));
+  }
+
+  function addQuotationItem() {
+    if (items.length >= 100) {
+      showToast("error", "একটি কোটেশনে সর্বোচ্চ ১০০টি পণ্য যোগ করা যাবে।");
+      return;
+    }
+    setItems((current) => [...current, {
+      rowId: nextRowId,
+      product_id: "",
+      quantity: "1",
+      unit_price: "",
+    }]);
+    setNextRowId((current) => current + 1);
+  }
+
+  function resetForm() {
+    setValues({
+      customer_id: "",
+      customer_name: "",
+      mobile_number: "",
+      address: "",
+      issue_date: today,
+      valid_until: defaultValidity.toISOString().slice(0, 10),
+      vat_amount: "0",
+      discount_amount: "0",
+      terms: "",
+    });
+    setItems([{ rowId: nextRowId, product_id: "", quantity: "1", unit_price: "" }]);
+    setNextRowId((current) => current + 1);
+  }
+
+  const subtotal = items.reduce((total, item) => (
+    total + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
+  ), 0);
+  const totalAmount = subtotal + (Number(values.vat_amount) || 0) - (Number(values.discount_amount) || 0);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!values.customer_name.trim()) {
+      showToast("error", "কাস্টমার বা কোম্পানির নাম লিখুন।");
+      return;
+    }
+    if (!items.length || items.some((item) => !item.product_id || !item.quantity || item.unit_price === "")) {
+      showToast("error", "প্রতিটি পণ্যের সারিতে পণ্য, পরিমাণ ও দর পূরণ করুন।");
+      return;
+    }
+    if (values.valid_until < values.issue_date) {
+      showToast("error", "কোটেশনের মেয়াদ ইস্যুর তারিখের আগে হতে পারবে না।");
+      return;
+    }
+    if (Number(values.discount_amount) > subtotal + Number(values.vat_amount)) {
+      showToast("error", "ছাড় পণ্যমূল্য ও ভ্যাটের যোগফলের চেয়ে বেশি হতে পারবে না।");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await apiRequest("/quotations/create.php", {
+        method: "POST",
+        token,
+        shopId,
+        body: JSON.stringify({
+          ...values,
+          customer_name: values.customer_name.trim(),
+          mobile_number: values.mobile_number.trim(),
+          address: values.address.trim(),
+          items: items.map(({ product_id, quantity, unit_price }) => ({ product_id, quantity, unit_price })),
+        }),
+      });
+      showToast("success", response.message);
+      await loadQuotations("");
+      setSearch("");
+      setView("list");
+      resetForm();
+      onChanged();
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function openQuotation(quotation, purpose) {
+    setLoadingQuoteId(quotation.id);
+    try {
+      const response = await apiRequest(`/quotations/receipt.php?id=${encodeURIComponent(quotation.id)}`, { token, shopId });
+      const fullQuotation = response.data.quotation;
+      if (purpose === "convert") {
+        if (fullQuotation.status !== "open") {
+          showToast("error", "শুধু মেয়াদ থাকা খোলা কোটেশন বিক্রয়ে রূপান্তর করা যাবে।");
+          return;
+        }
+        if (fullQuotation.items.some((item) => !item.product_id)) {
+          showToast("error", "কোটেশনের কোনো পণ্য আর সক্রিয় নেই; বিক্রয়ে রূপান্তর করা যাবে না।");
+          return;
+        }
+        setConversionQuote(fullQuotation);
+      } else {
+        setPreview({ quotation: fullQuotation, shop: response.data.shop });
+      }
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setLoadingQuoteId(null);
+    }
+  }
+
+  const statusLabels = {
+    open: "খোলা",
+    expired: "মেয়াদ শেষ",
+    converted: "বিক্রয়ে রূপান্তরিত",
+    cancelled: "বাতিল",
+  };
+
+  return (
+    <>
+      <div className="product-modal-backdrop stock-report-backdrop">
+        <section aria-labelledby="quotation-panel-title" aria-modal="true" className="product-modal stock-report-modal quotation-panel" role="dialog">
+          <header className="product-modal-header no-print">
+            <span className="product-modal-icon"><FileText size={22} /></span>
+            <div><h2 id="quotation-panel-title">কোটেশন</h2><p>কাস্টমার বা কোম্পানিকে মূল্য প্রস্তাব তৈরি, প্রিন্ট ও বিক্রয়ে রূপান্তর করুন।</p></div>
+            <button aria-label="কোটেশন বন্ধ করুন" className="product-modal-close" onClick={onClose} type="button"><X size={20} /></button>
+          </header>
+          <div className="quotation-tabs no-print">
+            <button className={view === "create" ? "active" : ""} onClick={() => setView("create")} type="button"><Plus size={16} /> নতুন কোটেশন</button>
+            <button className={view === "list" ? "active" : ""} onClick={() => setView("list")} type="button"><FileText size={16} /> কোটেশনের তালিকা</button>
+          </div>
+          {view === "create" ? (
+            <form className="product-form quotation-form" onSubmit={handleSubmit}>
+              <div className="product-form-grid quotation-client-grid">
+                <label className="product-form-field">
+                  <span className="product-field-label">সেটআপ কাস্টমার <span className="optional-label">ঐচ্ছিক</span></span>
+                  <SearchableSelect
+                    id="quotation-customer"
+                    name="customer_id"
+                    onChange={updateField}
+                    options={[
+                      { value: "", label: "ওয়াক-ইন / নতুন কোম্পানি" },
+                      ...customers.map((customer) => ({
+                        value: customer.id,
+                        label: `${customer.customer_name}${customer.mobile_number ? ` · ${customer.mobile_number}` : ""}`,
+                      })),
+                    ]}
+                    placeholder="কাস্টমার খুঁজে নির্বাচন করুন"
+                    value={values.customer_id}
+                  />
+                </label>
+                <label className="product-form-field" htmlFor="quotation-customer-name">
+                  <span className="product-field-label">কাস্টমার / কোম্পানির নাম</span>
+                  <input className="product-field-control" id="quotation-customer-name" maxLength={180} name="customer_name" onChange={updateField} required value={values.customer_name} />
+                </label>
+                <label className="product-form-field" htmlFor="quotation-mobile">
+                  <span className="product-field-label">মোবাইল নম্বর <span className="optional-label">ঐচ্ছিক</span></span>
+                  <input className="product-field-control" id="quotation-mobile" maxLength={20} name="mobile_number" onChange={updateField} value={values.mobile_number} />
+                </label>
+                <label className="product-form-field" htmlFor="quotation-address">
+                  <span className="product-field-label">ঠিকানা <span className="optional-label">ঐচ্ছিক</span></span>
+                  <input className="product-field-control" id="quotation-address" maxLength={255} name="address" onChange={updateField} value={values.address} />
+                </label>
+                <label className="product-form-field" htmlFor="quotation-issue-date">
+                  <span className="product-field-label">ইস্যুর তারিখ</span>
+                  <input className="product-field-control" id="quotation-issue-date" name="issue_date" onChange={updateField} required type="date" value={values.issue_date} />
+                </label>
+                <label className="product-form-field" htmlFor="quotation-valid-until">
+                  <span className="product-field-label">মেয়াদ শেষ</span>
+                  <input className="product-field-control" id="quotation-valid-until" min={values.issue_date} name="valid_until" onChange={updateField} required type="date" value={values.valid_until} />
+                </label>
+              </div>
+              <div className="purchase-cart-heading">
+                <div><h3>প্রস্তাবিত পণ্য</h3><span>কোটেশন তৈরি করলে স্টক পরিবর্তন হবে না</span></div>
+                <button className="purchase-add-row" onClick={addQuotationItem} type="button"><Plus size={17} /> পণ্য যোগ করুন</button>
+              </div>
+              <div className="sales-cart-table-wrap">
+                <table className="sales-cart-table quotation-cart-table">
+                  <thead><tr><th scope="col">ক্রম</th><th scope="col">পণ্য</th><th scope="col">পরিমাণ</th><th scope="col">একক দর (৳)</th><th scope="col">মোট (৳)</th><th scope="col"><span className="sr-only">অ্যাকশন</span></th></tr></thead>
+                  <tbody>{items.map((item, index) => {
+                    const lineTotal = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
+                    const product = products.find((entry) => entry.id === Number(item.product_id));
+                    const selectedUnit = ELECTRICAL_UNITS.find((unit) => unit.value === product?.unit);
+                    return (
+                      <tr key={item.rowId}>
+                        <td className="sales-cart-index">{index + 1}</td>
+                        <td><div className="sales-cart-cell-control"><SearchableSelect
+                          ariaLabel={`${index + 1} নম্বর সারির পণ্য নির্বাচন`}
+                          className="product-field-control product-select-control"
+                          id={`quotation-product-${item.rowId}`}
+                          name={`quotation-product-${item.rowId}`}
+                          onChange={(event) => updateQuotationItem(item.rowId, "product_id", event.target.value)}
+                          options={products.map((entry) => ({
+                            value: entry.id,
+                            label: `${entry.product_name}${entry.product_code ? ` · ${entry.product_code}` : ""}`,
+                          }))}
+                          portalOptions
+                          placeholder="নাম/বারকোড"
+                          required
+                          value={item.product_id}
+                        /></div></td>
+                        <td><label className="sales-cart-cell-control" htmlFor={`quotation-qty-${item.rowId}`}><span className="purchase-input-group">
+                          <input aria-label={`${index + 1} নম্বর সারির পরিমাণ`} className="product-field-control" id={`quotation-qty-${item.rowId}`} min="0.001" onChange={(event) => updateQuotationItem(item.rowId, "quantity", event.target.value)} required step="0.001" type="number" value={item.quantity} />
+                          <span className="purchase-input-group-text">{selectedUnit?.label || product?.unit || "ইউনিট"}</span>
+                        </span></label></td>
+                        <td><label className="sales-cart-cell-control" htmlFor={`quotation-price-${item.rowId}`}><input aria-label={`${index + 1} নম্বর সারির দর`} className="product-field-control" id={`quotation-price-${item.rowId}`} min="0" onChange={(event) => updateQuotationItem(item.rowId, "unit_price", event.target.value)} required step="0.01" type="number" value={item.unit_price} /></label></td>
+                        <td><input aria-label={`${index + 1} নম্বর সারির মোট মূল্য`} className="product-field-control purchase-line-total-input" readOnly type="text" value={formatMoney(lineTotal)} /></td>
+                        <td><button aria-label={`${index + 1} নম্বর পণ্য সরান`} className="purchase-remove-row" disabled={items.length <= 1} onClick={() => setItems((current) => current.filter((entry) => entry.rowId !== item.rowId))} type="button"><Trash2 size={16} /></button></td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+              <div className="quotation-bottom-grid">
+                <label className="product-form-field" htmlFor="quotation-terms">
+                  <span className="product-field-label">শর্তাবলি / নোট <span className="optional-label">ঐচ্ছিক</span></span>
+                  <textarea className="product-field-control customer-address-control" id="quotation-terms" maxLength={2000} name="terms" onChange={updateField} rows={3} value={values.terms} />
+                </label>
+                <div className="quotation-calculation">
+                  <label><span>পণ্যের মূল্য</span><strong>৳ {formatMoney(subtotal)}</strong></label>
+                  <label><span>ভ্যাট</span><input className="product-field-control" min="0" name="vat_amount" onChange={updateField} step="0.01" type="number" value={values.vat_amount} /></label>
+                  <label><span>ছাড়</span><input className="product-field-control" min="0" name="discount_amount" onChange={updateField} step="0.01" type="number" value={values.discount_amount} /></label>
+                  <label className="quotation-total"><span>মোট</span><strong>৳ {formatMoney(Math.max(0, totalAmount))}</strong></label>
+                </div>
+              </div>
+              <footer className="product-form-actions">
+                <span>কোটেশন স্টক বা বকেয়া পরিবর্তন করে না।</span>
+                <div><button className="product-cancel-button" disabled={saving} onClick={resetForm} type="button">ফর্ম পরিষ্কার</button>
+                  <button className="product-save-button" disabled={saving || products.length === 0} type="submit">{saving ? <span className="button-spinner" /> : <Save size={17} />}{saving ? "সংরক্ষণ হচ্ছে..." : "কোটেশন সংরক্ষণ"}</button></div>
+              </footer>
+            </form>
+          ) : (
+            <div className="quotation-list-content">
+              <form className="quotation-search no-print" onSubmit={(event) => { event.preventDefault(); loadQuotations(); }}>
+                <input className="product-field-control" maxLength={120} onChange={(event) => setSearch(event.target.value)} placeholder="কোটেশন নম্বর, কাস্টমার বা মোবাইল খুঁজুন" value={search} />
+                <button className="user-action-button" type="submit"><Search size={16} /> খুঁজুন</button>
+              </form>
+              {loading ? <div className="user-list-empty"><span className="button-spinner" /> কোটেশন লোড হচ্ছে...</div> : quotations.length ? (
+                <div className="stock-report-table-wrap quotation-list-table-wrap">
+                  <table className="stock-report-table quotation-list-table">
+                    <thead><tr><th>কোটেশন</th><th>কাস্টমার / কোম্পানি</th><th>তারিখ</th><th>মেয়াদ</th><th>মোট</th><th>অবস্থা</th><th className="no-print">কাজ</th></tr></thead>
+                    <tbody>{quotations.map((quotation) => (
+                      <tr key={quotation.id}>
+                        <td><strong>{quotation.quotation_number}</strong></td>
+                        <td>{quotation.customer_name}<small>{quotation.mobile_number || ""}</small></td>
+                        <td>{quotation.issue_date}</td>
+                        <td>{quotation.valid_until}</td>
+                        <td>৳ {formatMoney(quotation.total_amount)}</td>
+                        <td><span className={`quotation-status quotation-status-${quotation.status}`}>{statusLabels[quotation.status] || quotation.status}</span>
+                          {quotation.invoice_number ? <small>{quotation.invoice_number}</small> : null}</td>
+                        <td className="no-print">
+                          <div className="quotation-row-actions">
+                            <button className="user-action-button" disabled={loadingQuoteId !== null} onClick={() => openQuotation(quotation, "print")} type="button"><Printer size={14} /> মেমো</button>
+                            {quotation.status === "open" ? <button className="product-save-button quotation-convert-button" disabled={loadingQuoteId !== null} onClick={() => openQuotation(quotation, "convert")} type="button"><ShoppingCart size={14} /> বিক্রয়</button> : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              ) : <div className="user-list-empty">কোনো কোটেশন পাওয়া যায়নি।</div>}
+            </div>
+          )}
+        </section>
+      </div>
+      {preview ? <QuotationMemo quotation={preview.quotation} shop={preview.shop || shop} onClose={() => setPreview(null)} /> : null}
+      {conversionQuote ? (
+        <SalesForm
+          initialQuote={conversionQuote}
+          onClose={() => setConversionQuote(null)}
+          onQuoteConverted={() => {
+            loadQuotations();
+            onChanged();
+          }}
+          showToast={showToast}
+          shop={shop}
+          shopId={shopId}
+          token={token}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function SalesForm({
   token,
   shopId,
   shop,
   onClose,
-  onSaved,
+  onSaved = () => {},
+  onQuoteConverted = () => {},
   showToast,
   canCreateCustomer = false,
   initialSale = null,
+  initialQuote = null,
 }) {
   const [customers, setCustomers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -2648,27 +3108,37 @@ function SalesForm({
   const [returnQuantities, setReturnQuantities] = useState({});
 
   useEffect(() => {
-    if (!initialSale) return;
-    setSaleSource(initialSale.sale_source);
-    setWarehouseId(initialSale.warehouse_id ? String(initialSale.warehouse_id) : "");
+    if (!initialSale && !initialQuote) return;
+    if (initialSale) {
+      setSaleSource(initialSale.sale_source);
+      setWarehouseId(initialSale.warehouse_id ? String(initialSale.warehouse_id) : "");
+    } else {
+      setSaleSource("shop");
+      setWarehouseId("");
+    }
+    const source = initialSale || initialQuote;
+    const customerId = source.customer_id ? Number(source.customer_id) : null;
     setValues({
-      customer_id: initialSale.customer_id ? String(initialSale.customer_id) : "",
-      customer_search: initialSale.customer_id
-        ? customerOptionLabel(customers.find((customer) => customer.id === initialSale.customer_id) || {
-          customer_name: initialSale.customer_name,
-          id: initialSale.customer_id,
+      customer_id: customerId ? String(customerId) : "",
+      customer_search: customerId
+        ? customerOptionLabel(customers.find((customer) => customer.id === customerId) || {
+          customer_name: source.customer_name,
+          id: customerId,
+          mobile_number: source.mobile_number,
         })
         : "",
-      customer_name: initialSale.customer_id ? "" : initialSale.customer_name,
-      sale_date: initialSale.sale_date,
-      vat_amount: String(initialSale.vat_amount),
-      discount_amount: String(initialSale.discount_amount),
-      special_discount_amount: String(initialSale.special_discount_amount),
-      payment_method: initialSale.payment_method,
-      payment_received: String(initialSale.payment_received),
-      notes: initialSale.notes || "",
+      customer_name: customerId ? "" : source.customer_name,
+      sale_date: initialSale?.sale_date || new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 10),
+      vat_amount: String(source.vat_amount || 0),
+      discount_amount: String(source.discount_amount || 0),
+      special_discount_amount: String(initialSale?.special_discount_amount || 0),
+      payment_method: initialSale?.payment_method || (customerId ? "credit" : "cash"),
+      payment_received: initialSale ? String(initialSale.payment_received) : "",
+      notes: initialSale?.notes || (initialQuote ? `কোটেশন ${initialQuote.quotation_number} থেকে` : ""),
     });
-    const saleItems = initialSale.items.map((item, index) => ({
+    const saleItems = source.items.map((item, index) => ({
       rowId: index + 1,
       product_id: String(item.product_id),
       product_search: `${item.product_name}${item.product_code ? ` · ${item.product_code}` : ""}`,
@@ -2677,25 +3147,7 @@ function SalesForm({
     }));
     setItems(saleItems);
     setNextRowId(saleItems.length + 1);
-  }, [initialSale, customers]);
-
-  useEffect(() => {
-    if (!initialSale) return;
-    setProducts((current) => {
-      const byId = new Map(current.map((product) => [product.id, product]));
-      initialSale.items.forEach((item) => {
-        if (!byId.has(item.product_id)) {
-          byId.set(item.product_id, {
-            id: item.product_id,
-            product_name: item.product_name,
-            unit: item.unit,
-            available_stock: Number(item.quantity),
-          });
-        }
-      });
-      return [...byId.values()];
-    });
-  }, [initialSale, products.length]);
+  }, [initialSale, initialQuote, customers]);
 
   useEffect(() => {
     let active = true;
@@ -2721,7 +3173,14 @@ function SalesForm({
 
   useEffect(() => {
     if (saleSource === "warehouse" && !warehouseId) {
-      setProducts([]);
+      const sourceItems = initialSale?.items || initialQuote?.items || [];
+      setProducts(sourceItems.map((item) => ({
+        id: Number(item.product_id),
+        product_name: item.product_name,
+        product_code: item.product_code,
+        unit: item.unit,
+        available_stock: initialSale ? Number(item.quantity) : 0,
+      })));
       setLoadingProducts(false);
       return undefined;
     }
@@ -2731,7 +3190,22 @@ function SalesForm({
     setLoadingProducts(true);
     apiRequest(`/products/list.php?${query.toString()}`, { token, shopId })
       .then((response) => {
-        if (active) setProducts(response.data.products);
+        if (!active) return;
+        const byId = new Map(response.data.products.map((product) => [product.id, product]));
+        const sourceItems = initialSale?.items || initialQuote?.items || [];
+        sourceItems.forEach((item) => {
+          const productId = Number(item.product_id);
+          if (productId && !byId.has(productId)) {
+            byId.set(productId, {
+              id: productId,
+              product_name: item.product_name,
+              product_code: item.product_code,
+              unit: item.unit,
+              available_stock: initialSale ? Number(item.quantity) : 0,
+            });
+          }
+        });
+        setProducts([...byId.values()]);
       })
       .catch((error) => {
         if (active) showToast("error", error.message);
@@ -2742,7 +3216,7 @@ function SalesForm({
     return () => {
       active = false;
     };
-  }, [token, shopId, showToast, saleSource, warehouseId]);
+  }, [token, shopId, showToast, saleSource, warehouseId, initialSale, initialQuote]);
 
   useEffect(() => {
     const search = values.customer_name.trim();
@@ -2879,12 +3353,14 @@ function SalesForm({
     setSaleSource(source);
     setWarehouseId("");
     setProducts([]);
-    setItems((current) => current.map((item) => ({
-      ...item,
-      product_id: "",
-      product_search: "",
-      unit_price: "",
-    })));
+    if (!initialQuote) {
+      setItems((current) => current.map((item) => ({
+        ...item,
+        product_id: "",
+        product_search: "",
+        unit_price: "",
+      })));
+    }
   }
 
   async function loadReturnableItems() {
@@ -3012,6 +3488,7 @@ function SalesForm({
             ? Math.max(0, invoiceAmount).toFixed(2)
             : values.payment_received,
           sale_id: initialSale?.id,
+          quotation_id: initialQuote?.id,
           items: saleLines.map(({ product_id, quantity, unit_price }) => ({
             product_id,
             quantity,
@@ -3025,6 +3502,7 @@ function SalesForm({
       });
       setReceipt(response.data.sale);
       onSaved();
+      if (initialQuote) onQuoteConverted();
       showToast("success", response.message);
     } catch (error) {
       showToast("error", error.message);
@@ -3068,7 +3546,7 @@ function SalesForm({
         <header className="product-modal-header no-print">
           <span className="product-modal-icon"><ShoppingCart size={22} /></span>
           <div>
-            <h2 id="sales-form-title">{receipt ? "বিক্রয় রসিদ" : initialSale ? "বিক্রয় মেমো সম্পাদনা" : "নতুন বিক্রয় / মেমো"}</h2>
+            <h2 id="sales-form-title">{receipt ? "বিক্রয় রসিদ" : initialSale ? "বিক্রয় মেমো সম্পাদনা" : initialQuote ? "কোটেশন থেকে বিক্রয়" : "নতুন বিক্রয় / মেমো"}</h2>
             <p>{receipt ? receipt.invoice_number : "পণ্য বিক্রি, পুরোনো পণ্য ফেরত ও বিল সমন্বয় করুন।"}</p>
           </div>
           <button
@@ -3183,12 +3661,14 @@ function SalesForm({
                     onChange={(event) => {
                       setWarehouseId(event.target.value);
                       setProducts([]);
-                      setItems((current) => current.map((item) => ({
-                        ...item,
-                        product_id: "",
-                        product_search: "",
-                        unit_price: "",
-                      })));
+                        if (!initialQuote) {
+                          setItems((current) => current.map((item) => ({
+                            ...item,
+                            product_id: "",
+                            product_search: "",
+                            unit_price: "",
+                          })));
+                        }
                     }}
                     options={[
                       { value: "", label: "গুদাম নির্বাচন করুন" },
@@ -3204,7 +3684,7 @@ function SalesForm({
               <div className="product-form-field">
                 <div className="sales-customer-field-heading">
                   <span className="product-field-label">কাস্টমার খুঁজুন (নাম/মোবাইল)</span>
-                  {canCreateCustomer && !initialSale ? (
+                  {canCreateCustomer && !initialSale && !initialQuote ? (
                     <button
                       aria-label="নতুন কাস্টমার যোগ করুন"
                       className="user-action-button customer-quick-add"
@@ -3218,7 +3698,7 @@ function SalesForm({
                 </div>
                 <SearchableSelect
                   ariaLabel="কাস্টমার খুঁজুন (নাম/মোবাইল)"
-                  disabled={Boolean(initialSale)}
+                  disabled={Boolean(initialSale || initialQuote)}
                   id="sale-customer"
                   name="customer_id"
                   onChange={updateField}
@@ -3246,7 +3726,7 @@ function SalesForm({
                     name="customer_name"
                     onChange={updateField}
                     placeholder="আগের নাম লিখে নির্বাচন করুন, অথবা নতুন নাম দিন"
-                    readOnly={Boolean(initialSale)}
+                    readOnly={Boolean(initialSale || initialQuote)}
                     value={values.customer_name}
                   />
                   <datalist id="sale-walkin-name-options">
@@ -3261,8 +3741,8 @@ function SalesForm({
             </div>
 
             <div className="purchase-cart-heading sales-cart-heading">
-              <div><h3>বিক্রয়ের পণ্য</h3><span>পণ্যের নাম বা বারকোড লিখে খুঁজুন</span></div>
-              <button className="purchase-add-row" onClick={addItem} type="button"><Plus size={17} /> পণ্য যোগ করুন</button>
+              <div><h3>বিক্রয়ের পণ্য</h3><span>{initialQuote ? "কোটেশনের পণ্য ও দর অপরিবর্তিত থাকবে" : "পণ্যের নাম বা বারকোড লিখে খুঁজুন"}</span></div>
+              {!initialQuote ? <button className="purchase-add-row" onClick={addItem} type="button"><Plus size={17} /> পণ্য যোগ করুন</button> : null}
             </div>
             <p className="sales-fifo-note">
               <strong>FIFO স্টক হিসাব</strong>
@@ -3293,6 +3773,7 @@ function SalesForm({
                             className="product-field-control product-select-control"
                             id={`sale-product-${item.rowId}`}
                             name={`sale_product_${item.rowId}`}
+                            disabled={Boolean(initialQuote)}
                             onChange={(event) => updateItem(item.rowId, "product_id", event.target.value)}
                             options={products.map((product) => ({
                               value: product.id,
@@ -3308,14 +3789,14 @@ function SalesForm({
                       <td>
                         <label className="sales-cart-cell-control" htmlFor={`sale-qty-${item.rowId}`}>
                           <span className="purchase-input-group">
-                            <input aria-label="পরিমাণ" className="product-field-control" id={`sale-qty-${item.rowId}`} max={item.product?.available_stock} min="0.001" onChange={(event) => updateItem(item.rowId, "quantity", event.target.value)} step="0.001" type="number" value={item.quantity} />
+                            <input aria-label="পরিমাণ" className="product-field-control" id={`sale-qty-${item.rowId}`} max={item.product?.available_stock} min="0.001" onChange={(event) => updateItem(item.rowId, "quantity", event.target.value)} readOnly={Boolean(initialQuote)} step="0.001" type="number" value={item.quantity} />
                             <span className="purchase-input-group-text">{selectedUnit?.label || item.product?.unit || "ইউনিট"}</span>
                           </span>
                         </label>
                       </td>
                       <td>
                         <label className="sales-cart-cell-control" htmlFor={`sale-price-${item.rowId}`}>
-                          <input aria-label="একক বিক্রয়মূল্য" className="product-field-control" id={`sale-price-${item.rowId}`} min="0" onChange={(event) => updateItem(item.rowId, "unit_price", event.target.value)} step="0.01" type="number" value={item.unit_price} />
+                          <input aria-label="একক বিক্রয়মূল্য" className="product-field-control" id={`sale-price-${item.rowId}`} min="0" onChange={(event) => updateItem(item.rowId, "unit_price", event.target.value)} readOnly={Boolean(initialQuote)} step="0.01" type="number" value={item.unit_price} />
                         </label>
                       </td>
                       <td>
@@ -3328,7 +3809,7 @@ function SalesForm({
                         />
                       </td>
                       <td>
-                        <button aria-label={`${index + 1} নম্বর বিক্রয় সারি সরান`} className="purchase-remove-row" onClick={() => removeItem(item.rowId)} type="button"><Trash2 size={17} /></button>
+                        <button aria-label={`${index + 1} নম্বর বিক্রয় সারি সরান`} className="purchase-remove-row" disabled={Boolean(initialQuote)} onClick={() => removeItem(item.rowId)} type="button"><Trash2 size={17} /></button>
                       </td>
                     </tr>
                     );
@@ -3337,14 +3818,14 @@ function SalesForm({
               </table>
             </div>
 
-            <div className="sales-return-toolbar">
+            {!initialQuote ? <div className="sales-return-toolbar">
               <div><strong>বিক্রয় ফেরত (−)</strong><small>কাস্টমার নির্বাচন করুন, অথবা ওয়াক-ইন নাম লিখে সেই নামের আগের বিল থেকে পণ্য ফেরত দিন।</small></div>
               <button className="purchase-add-row" disabled={loadingReturns} onClick={loadReturnableItems} type="button">
                 {loadingReturns ? <span className="button-spinner" /> : <RotateCcw size={16} />}
                 {showReturns ? "ফেরত বন্ধ" : "পণ্য ফেরত যোগ করুন"}
               </button>
-            </div>
-            {showReturns ? (
+            </div> : null}
+            {!initialQuote && showReturns ? (
               <div className="sales-return-panel">
                 {availableInvoices.length > 0 ? (
                   <>
@@ -3380,8 +3861,8 @@ function SalesForm({
                 <span className="product-field-label">বিক্রয় মূল্য</span>
                 <div aria-label={`বিক্রয় মূল্য ৳ ${formatMoney(subtotal)}`} aria-readonly="true" className="product-field-control sales-summary-readonly" role="textbox">৳ {formatMoney(subtotal)}</div>
               </div>
-              <label className="product-form-field" htmlFor="sale-vat"><span className="product-field-label">ভ্যাট (+)</span><input className="product-field-control" id="sale-vat" min="0" name="vat_amount" onChange={updateField} step="0.01" type="number" value={values.vat_amount} /></label>
-              <label className="product-form-field" htmlFor="sale-discount"><span className="product-field-label">ছাড় (−)</span><input className="product-field-control" id="sale-discount" min="0" name="discount_amount" onChange={updateField} step="0.01" type="number" value={values.discount_amount} /></label>
+              <label className="product-form-field" htmlFor="sale-vat"><span className="product-field-label">ভ্যাট (+)</span><input className="product-field-control" id="sale-vat" min="0" name="vat_amount" onChange={updateField} readOnly={Boolean(initialQuote)} step="0.01" type="number" value={values.vat_amount} /></label>
+              <label className="product-form-field" htmlFor="sale-discount"><span className="product-field-label">ছাড় (−)</span><input className="product-field-control" id="sale-discount" min="0" name="discount_amount" onChange={updateField} readOnly={Boolean(initialQuote)} step="0.01" type="number" value={values.discount_amount} /></label>
               {selectedCustomer ? (
                 <div className="product-form-field sales-summary-field">
                   <span className="product-field-label">পূর্ববর্তী বকেয়া (+)</span>
@@ -3397,7 +3878,7 @@ function SalesForm({
                 <span className="product-field-label">বর্তমান বকেয়া</span>
                 <div aria-label={`বর্তমান বকেয়া ৳ ${formatMoney(presentDue)}`} aria-readonly="true" className="product-field-control sales-summary-readonly" role="textbox">৳ {formatMoney(presentDue)}</div>
               </div>
-              <label className="product-form-field" htmlFor="sale-special-discount"><span className="product-field-label">বিশেষ ছাড় (−)</span><input className="product-field-control" id="sale-special-discount" min="0" name="special_discount_amount" onChange={updateField} step="0.01" type="number" value={values.special_discount_amount} /></label>
+              <label className="product-form-field" htmlFor="sale-special-discount"><span className="product-field-label">বিশেষ ছাড় (−)</span><input className="product-field-control" id="sale-special-discount" min="0" name="special_discount_amount" onChange={updateField} readOnly={Boolean(initialQuote)} step="0.01" type="number" value={values.special_discount_amount} /></label>
               <div className="product-form-field sales-summary-field">
                 <span className="product-field-label">{netAmount < 0 ? "কাস্টমারের জমা" : "নিট পরিমাণ"}</span>
                 <div aria-label={`${netAmount < 0 ? "কাস্টমারের জমা" : "নিট পরিমাণ"} ৳ ${formatMoney(Math.abs(netAmount))}`} aria-readonly="true" className="product-field-control sales-summary-readonly sales-summary-net">৳ {formatMoney(Math.abs(netAmount))}</div>
@@ -6750,6 +7231,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
   const [showBankSetup, setShowBankSetup] = useState(false);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [showSalesForm, setShowSalesForm] = useState(false);
+  const [showQuotationPanel, setShowQuotationPanel] = useState(false);
   const [showCustomerPaymentForm, setShowCustomerPaymentForm] = useState(false);
   const [showCustomerReturnForm, setShowCustomerReturnForm] = useState(false);
   const [showSupplierReturnForm, setShowSupplierReturnForm] = useState(false);
@@ -7037,6 +7519,10 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       setShowSalesForm(true);
       return;
     }
+    if (module.key === "quotation-create") {
+      setShowQuotationPanel(true);
+      return;
+    }
     if (module.key === "sales-return") {
       setShowCustomerReturnForm(true);
       return;
@@ -7064,6 +7550,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       "customer-payment": ["total_customer_payments", "আদায়"],
       "stock-damage": ["total_stock_damages", "এন্ট্রি"],
       "sales-create": ["total_sales", "বিক্রয়"],
+      "quotation-create": ["total_quotations", "কোটেশন"],
       "sales-return": ["total_sales_returns", "রিটার্ন"],
       "sales-report": ["total_sales", "বিল"],
       "customer-ledger": ["total_customers", "কাস্টমার"],
@@ -7096,6 +7583,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
     "supplier-payment",
     "stock-damage",
     "sales-create",
+    "quotation-create",
     "sales-return",
     "sales-report",
     "purchase-report",
@@ -7175,6 +7663,16 @@ function WelcomePage({ user, token, onLogout, showToast }) {
             refreshDashboardSummary();
           }}
           showToast={showToast}
+          shopId={selectedShopId}
+          token={token}
+        />
+      ) : null}
+      {showQuotationPanel ? (
+        <QuotationPanel
+          onClose={() => setShowQuotationPanel(false)}
+          onChanged={refreshDashboardSummary}
+          showToast={showToast}
+          shop={activeShop}
           shopId={selectedShopId}
           token={token}
         />

@@ -12,6 +12,13 @@ $user = authenticatedUser();
 requirePermission($user, 'sales');
 $shopId = authorizedShopId($user);
 $body = requestJson();
+$quotationId = null;
+if (isset($body['quotation_id']) && $body['quotation_id'] !== '') {
+    $quotationId = filter_var($body['quotation_id'], FILTER_VALIDATE_INT);
+    if ($quotationId === false || $quotationId < 1 || isset($body['sale_id'])) {
+        respond(422, false, 'কোটেশন থেকে সঠিক নতুন বিক্রয় তৈরি করুন।');
+    }
+}
 $editSaleId = null;
 if (isset($body['sale_id']) && $body['sale_id'] !== '') {
     $editSaleId = filter_var($body['sale_id'], FILTER_VALIDATE_INT);
@@ -160,6 +167,59 @@ usort($validatedReturns, static fn(array $left, array $right): int => $left['sal
 try {
     $pdo = database();
     $pdo->beginTransaction();
+
+    $sourceQuotation = null;
+    if ($quotationId !== null) {
+        $quotationQuery = $pdo->prepare(
+            'SELECT id, customer_id, customer_name, status, valid_until, vat_amount, discount_amount
+             FROM quotations WHERE id = :id AND shop_id = :shop_id FOR UPDATE'
+        );
+        $quotationQuery->execute(['id' => $quotationId, 'shop_id' => $shopId]);
+        $sourceQuotation = $quotationQuery->fetch();
+        if (!$sourceQuotation) {
+            $pdo->rollBack();
+            respond(404, false, 'কোটেশনটি পাওয়া যায়নি।');
+        }
+        if ($sourceQuotation['status'] !== 'open' || $sourceQuotation['valid_until'] < date('Y-m-d')) {
+            $pdo->rollBack();
+            respond(409, false, 'এই কোটেশন আর বিক্রয়ে রূপান্তর করা যাবে না।');
+        }
+        if ((int) ($sourceQuotation['customer_id'] ?? 0) !== (int) ($customerId ?? 0)
+            || ($customerId === null && $sourceQuotation['customer_name'] !== $customerName)) {
+            $pdo->rollBack();
+            respond(422, false, 'কোটেশনের কাস্টমার পরিবর্তন করা যাবে না।');
+        }
+        $quotationItemsQuery = $pdo->prepare(
+            'SELECT product_id, quantity, unit_price
+             FROM quotation_items WHERE quotation_id = :quotation_id ORDER BY id'
+        );
+        $quotationItemsQuery->execute(['quotation_id' => $quotationId]);
+        $quotationItems = $quotationItemsQuery->fetchAll();
+        $itemsMatchQuotation = count($quotationItems) === count($validatedItems);
+        if ($itemsMatchQuotation) {
+            foreach ($quotationItems as $index => $quotationItem) {
+                $saleItem = $validatedItems[$index];
+                if ($quotationItem['product_id'] === null
+                    || (int) $quotationItem['product_id'] !== $saleItem['product_id']
+                    || salesQuantityUnits((string) $quotationItem['quantity']) !== $saleItem['quantity_units']
+                    || (int) round((float) $quotationItem['unit_price'] * 100)
+                        !== (int) round((float) $saleItem['unit_price'] * 100)) {
+                    $itemsMatchQuotation = false;
+                    break;
+                }
+            }
+        }
+        if (!$itemsMatchQuotation
+            || (int) round((float) $sourceQuotation['vat_amount'] * 100)
+                !== (int) round((float) $vatAmount * 100)
+            || (int) round((float) $sourceQuotation['discount_amount'] * 100)
+                !== (int) round((float) $discountAmount * 100)
+            || (float) $specialDiscountAmount !== 0.0
+            || $validatedReturns !== []) {
+            $pdo->rollBack();
+            respond(422, false, 'বিক্রয়টি কোটেশনের পণ্য, পরিমাণ, দর, ভ্যাট ও ছাড়ের সাথে মিলতে হবে; ফেরত বা বিশেষ ছাড় দেয়া যাবে না।');
+        }
+    }
 
     $existingSale = null;
     $existingItems = [];
@@ -827,6 +887,22 @@ try {
             'id' => $customerId,
             'shop_id' => $shopId,
         ]);
+    }
+    if ($quotationId !== null) {
+        $quotationUpdate = $pdo->prepare(
+            'UPDATE quotations
+             SET status = \'converted\', converted_sale_id = :sale_id
+             WHERE id = :quotation_id AND shop_id = :shop_id AND status = \'open\''
+        );
+        $quotationUpdate->execute([
+            'sale_id' => $saleId,
+            'quotation_id' => $quotationId,
+            'shop_id' => $shopId,
+        ]);
+        if ($quotationUpdate->rowCount() !== 1) {
+            $pdo->rollBack();
+            respond(409, false, 'কোটেশনের অবস্থা পরিবর্তিত হয়েছে; বিক্রয় সংরক্ষণ করা যায়নি।');
+        }
     }
     $pdo->commit();
     $sms = null;
