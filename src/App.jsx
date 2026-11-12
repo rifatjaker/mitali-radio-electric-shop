@@ -390,6 +390,7 @@ const DASHBOARD_TABS = [
       { key: "purchase-report", title: "ক্রয় / চালান রিপোর্ট", detail: "তারিখ, সাপ্লায়ার ও চালান অনুযায়ী ক্রয় দেখুন", icon: Receipt },
       { title: "লাভ-ক্ষতি", detail: "ব্যবসার আয়-ব্যয়ের সারাংশ", icon: Activity },
       { key: "customer-ledger", title: "কাস্টমার লেজার", detail: "কাস্টমারের বাকি ও তারিখভিত্তিক লেনদেন দেখুন ও প্রিন্ট করুন", icon: ContactRound },
+      { key: "supplier-ledger", title: "সাপ্লায়ার লেজার", detail: "সাপ্লায়ারের ক্রয়, রিটার্ন, পেমেন্ট ও বকেয়া দেখুন ও প্রিন্ট করুন", icon: Truck },
       { key: "stock-report", title: "স্টক রিপোর্ট", detail: "তারিখভিত্তিক মজুত, ক্রয়, বিক্রয় ও সমন্বয়", icon: FileText },
       { key: "warehouse-stock", title: "গুদাম স্টক রিপোর্ট", detail: "গুদামভিত্তিক মজুত দেখুন ও প্রিন্ট করুন", icon: Boxes },
     ],
@@ -5845,6 +5846,129 @@ function CustomerLedgerPanel({ token, shopId, shop, onClose, showToast }) {
   );
 }
 
+function SupplierLedgerPanel({ token, shopId, shop, onClose, showToast }) {
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const [filters, setFilters] = useState({
+    supplier_id: "",
+    date_from: `${today.slice(0, 7)}-01`,
+    date_to: today,
+  });
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  async function loadReport(event) {
+    if (event) event.preventDefault();
+    setLoading(true);
+    try {
+      const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== ""));
+      const response = await apiRequest(`/suppliers/ledger-report.php?${query.toString()}`, { token, shopId });
+      setReport(response.data);
+    } catch (error) {
+      showToast("error", error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadReport();
+  }, [token, shopId]);
+
+  const formatLedgerDate = (value) => new Intl.DateTimeFormat("bn-BD", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+    numberingSystem: "latn",
+  }).format(new Date(`${value}T00:00:00Z`));
+
+  return (
+    <div className="product-modal-backdrop stock-report-backdrop">
+      <section aria-labelledby="supplier-ledger-title" aria-modal="true" className="product-modal stock-report-modal supplier-ledger-modal" role="dialog">
+        <header className="product-modal-header no-print">
+          <span className="product-modal-icon"><Truck size={22} /></span>
+          <div><h2 id="supplier-ledger-title">সাপ্লায়ার লেজার</h2><p>সাপ্লায়ারের ক্রয়, রিটার্ন, পেমেন্ট ও চলতি বকেয়া দেখুন।</p></div>
+          <button aria-label="সাপ্লায়ার লেজার বন্ধ করুন" className="product-modal-close" onClick={onClose} type="button"><X size={20} /></button>
+        </header>
+        <form className="sales-report-filters no-print" onSubmit={loadReport}>
+          <label>
+            <span>সাপ্লায়ার</span>
+            <SearchableSelect
+              onChange={(event) => setFilters((current) => ({ ...current, supplier_id: event.target.value }))}
+              options={[
+                { value: "", label: "সাপ্লায়ার নির্বাচন করুন" },
+                ...(report?.suppliers || []).map((supplier) => ({
+                  value: supplier.id,
+                  label: `${supplier.supplier_name}${supplier.mobile_number ? ` · ${supplier.mobile_number}` : ""}${supplier.address ? ` · ${supplier.address}` : ""}`,
+                })),
+              ]}
+              placeholder="নাম, মোবাইল বা ঠিকানা দিয়ে খুঁজুন"
+              value={filters.supplier_id}
+            />
+          </label>
+          <label><span>তারিখ থেকে</span><input className="product-field-control" max={today} onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))} required type="date" value={filters.date_from} /></label>
+          <label><span>তারিখ পর্যন্ত</span><input className="product-field-control" max={today} onChange={(event) => setFilters((current) => ({ ...current, date_to: event.target.value }))} required type="date" value={filters.date_to} /></label>
+          <button className="product-save-button" disabled={loading} type="submit">{loading ? <span className="button-spinner" /> : <BarChart3 size={16} />} লেজার দেখুন</button>
+          <button className="user-action-button" disabled={!report?.supplier} onClick={() => window.print()} type="button"><Printer size={16} /> প্রিন্ট</button>
+        </form>
+        <div className="stock-report-print-heading supplier-ledger-print-heading">
+          <ShopPrintHeader shop={shop} />
+          <span>
+            সাপ্লায়ার লেজার
+            {report?.supplier ? ` · ${report.supplier.supplier_name}` : ""}
+            {" · "}{report?.date_from ? formatLedgerDate(report.date_from) : filters.date_from}
+            {" থেকে "}{report?.date_to ? formatLedgerDate(report.date_to) : filters.date_to}
+          </span>
+          {report?.supplier?.mobile_number ? <small>মোবাইল: {report.supplier.mobile_number}</small> : null}
+          {report?.supplier?.address ? <small>ঠিকানা: {report.supplier.address}</small> : null}
+        </div>
+        {report?.supplier ? (
+          <div className="sales-report-summary supplier-ledger-summary">
+            <div><span>শুরুর বকেয়া</span><strong>৳ {formatMoney(report.opening_balance)}</strong></div>
+            <div><span>মোট ক্রয়</span><strong>৳ {formatMoney(report.summary.purchase)}</strong></div>
+            <div><span>মোট রিটার্ন</span><strong>৳ {formatMoney(report.summary.returns)}</strong></div>
+            <div><span>মোট পরিশোধ</span><strong>৳ {formatMoney(report.summary.payments)}</strong></div>
+            <div><span>শেষ বকেয়া</span><strong>৳ {formatMoney(report.closing_balance)}</strong></div>
+          </div>
+        ) : null}
+        <div className="sales-report-table-wrap supplier-ledger-table-wrap">
+          {loading && !report ? (
+            <div className="user-list-empty"><span className="button-spinner" /> সাপ্লায়ার লেজার তৈরি হচ্ছে...</div>
+          ) : !report?.supplier ? (
+            <div className="user-list-empty">লেজার দেখতে সাপ্লায়ার নির্বাচন করুন।</div>
+          ) : (
+            <>
+              <table className="sales-report-table supplier-ledger-table">
+                <thead><tr><th>তারিখ</th><th>বিবরণ</th><th>রেফারেন্স</th><th>ডেবিট</th><th>ক্রেডিট</th><th>বকেয়া</th></tr></thead>
+                <tbody>
+                  <tr className="supplier-ledger-opening">
+                    <td>{formatLedgerDate(report.date_from)}</td>
+                    <td>প্রারম্ভিক বকেয়া</td><td>—</td>
+                    <td>—</td><td>—</td><td>৳ {formatMoney(report.opening_balance)}</td>
+                  </tr>
+                  {report.rows.map((row, index) => (
+                    <tr key={`${row.event_type}-${row.reference}-${index}`}>
+                      <td>{formatLedgerDate(row.transaction_date)}</td>
+                      <td>{row.description}</td>
+                      <td>{row.reference}</td>
+                      <td>{row.debit > 0 ? `৳ ${formatMoney(row.debit)}` : "—"}</td>
+                      <td>{row.credit > 0 ? `৳ ${formatMoney(row.credit)}` : "—"}</td>
+                      <td><strong>৳ {formatMoney(row.balance)}</strong></td>
+                    </tr>
+                  ))}
+                  {report.rows.length === 0 ? <tr><td colSpan="6">নির্বাচিত সময়ে কোনো লেনদেন নেই।</td></tr> : null}
+                </tbody>
+                <tfoot><tr><th colSpan="3">মোট · {numberFormatter.format(report.summary.transaction_count)}টি লেনদেন</th><td>৳ {formatMoney(report.summary.debit)}</td><td>৳ {formatMoney(report.summary.credit)}</td><td>৳ {formatMoney(report.closing_balance)}</td></tr></tfoot>
+              </table>
+              {report.truncated ? <p className="sales-report-limit">প্রদর্শিত সীমা {numberFormatter.format(report.limit)}টি লেনদেন। ছোট সময়সীমা নির্বাচন করে আবার দেখুন।</p> : null}
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SalesReportPanel({ token, shopId, shop, onClose, onChanged, showToast, canEdit, canDelete }) {
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const [filters, setFilters] = useState({
@@ -7239,6 +7363,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
   const [showStockReport, setShowStockReport] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [showCustomerLedger, setShowCustomerLedger] = useState(false);
+  const [showSupplierLedger, setShowSupplierLedger] = useState(false);
   const [showPurchaseReport, setShowPurchaseReport] = useState(false);
   const [showWarehouseStock, setShowWarehouseStock] = useState(false);
   const [showWarehouseTransfer, setShowWarehouseTransfer] = useState(false);
@@ -7511,6 +7636,10 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       setShowCustomerLedger(true);
       return;
     }
+    if (module.key === "supplier-ledger") {
+      setShowSupplierLedger(true);
+      return;
+    }
     if (module.key === "purchase-report") {
       setShowPurchaseReport(true);
       return;
@@ -7554,6 +7683,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       "sales-return": ["total_sales_returns", "রিটার্ন"],
       "sales-report": ["total_sales", "বিল"],
       "customer-ledger": ["total_customers", "কাস্টমার"],
+      "supplier-ledger": ["total_suppliers", "সাপ্লায়ার"],
       "purchase-report": ["total_purchases", "বিল"],
       "stock-report": ["total_products", "পণ্য"],
       "warehouse-stock": ["total_warehouse_stock_items", "স্টক আইটেম"],
@@ -7586,6 +7716,7 @@ function WelcomePage({ user, token, onLogout, showToast }) {
     "quotation-create",
     "sales-return",
     "sales-report",
+    "supplier-ledger",
     "purchase-report",
     "stock-report",
     "warehouse-stock",
@@ -7760,6 +7891,15 @@ function WelcomePage({ user, token, onLogout, showToast }) {
       {showCustomerLedger ? (
         <CustomerLedgerPanel
           onClose={() => setShowCustomerLedger(false)}
+          showToast={showToast}
+          shop={activeShop}
+          shopId={selectedShopId}
+          token={token}
+        />
+      ) : null}
+      {showSupplierLedger ? (
+        <SupplierLedgerPanel
+          onClose={() => setShowSupplierLedger(false)}
           showToast={showToast}
           shop={activeShop}
           shopId={selectedShopId}

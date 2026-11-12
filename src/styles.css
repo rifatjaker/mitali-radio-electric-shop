@@ -3521,7 +3521,15 @@ button {
   width: min(1120px, 100%);
 }
 
+.supplier-ledger-modal {
+  width: min(1220px, 100%);
+}
+
 .customer-ledger-print-heading {
+  display: none;
+}
+
+.supplier-ledger-print-heading {
   display: none;
 }
 
@@ -3529,12 +3537,22 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.supplier-ledger-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .customer-ledger-table {
   min-width: 760px;
 }
 
+.supplier-ledger-table {
+  min-width: 820px;
+}
+
 .customer-ledger-table td:nth-child(n + 4),
-.customer-ledger-table tfoot td {
+.customer-ledger-table tfoot td,
+.supplier-ledger-table td:nth-child(n + 4),
+.supplier-ledger-table tfoot td {
   text-align: right;
   white-space: nowrap;
 }
@@ -3994,6 +4012,11 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 10px 12px 0;
   }
+
+  .supplier-ledger-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px 12px 0;
+  }
 }
 
 @media print {
@@ -4012,14 +4035,17 @@ button {
   .purchase-report-modal,
   .purchase-report-modal *,
   .customer-ledger-modal,
-  .customer-ledger-modal * {
+  .customer-ledger-modal *,
+  .supplier-ledger-modal,
+  .supplier-ledger-modal * {
     visibility: visible !important;
   }
 
   .stock-report-modal,
   .sales-report-modal,
   .purchase-report-modal,
-  .customer-ledger-modal {
+  .customer-ledger-modal,
+  .supplier-ledger-modal {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -4037,7 +4063,9 @@ button {
   .purchase-report-modal .product-modal-header,
   .purchase-report-filters,
   .customer-ledger-modal .product-modal-header,
-  .customer-ledger-modal .sales-report-filters {
+  .customer-ledger-modal .sales-report-filters,
+  .supplier-ledger-modal .product-modal-header,
+  .supplier-ledger-modal .sales-report-filters {
     display: none !important;
   }
 
@@ -4061,8 +4089,17 @@ button {
     display: grid;
   }
 
+  .supplier-ledger-print-heading {
+    display: grid;
+  }
+
   .customer-ledger-summary {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 0 0 8px;
+  }
+
+  .supplier-ledger-summary {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 0 0 8px;
   }
 
@@ -4070,6 +4107,9 @@ button {
     min-width: 0;
   }
 
+  .supplier-ledger-table {
+    min-width: 0;
+  }
   .sales-report-summary {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     padding: 0 0 8px;
