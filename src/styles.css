@@ -2128,19 +2128,22 @@ button {
 }
 
 .sales-customer-field-heading {
+  position: relative;
   display: flex;
-  min-height: 30px;
+  min-height: 0;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  padding-right: 38px;
 }
 
 .customer-quick-add {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 50%;
+  right: 0;
   min-width: 30px;
   min-height: 30px;
   padding: 5px;
   color: #236d46;
+  transform: translateY(-50%);
 }
 
 .sales-cart-heading {
@@ -3315,6 +3318,10 @@ button {
 
 .quotation-list-table {
   min-width: 820px;
+}
+
+.stock-report-table.quotation-list-table tbody td:first-child {
+  display: table-cell;
 }
 
 .quotation-list-table td small {
